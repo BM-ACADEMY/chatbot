@@ -35,7 +35,7 @@ const getFlowStepById = async (req, res) => {
 const createFlowStep = async (req, res) => {
     try {
         const { 
-            stepId, flowId, question, options, 
+            stepId, flowId, question, options, nextStep,
             position, uiData, assignmentAction, 
             captureMapping, captureType, tagsOnReach 
         } = req.body;
@@ -48,7 +48,7 @@ const createFlowStep = async (req, res) => {
         }
 
         const step = await FlowStep.create({ 
-            stepId, flowId, question, options,
+            stepId, flowId, question, options, nextStep,
             position, uiData, assignmentAction,
             captureMapping, captureType, tagsOnReach
         });
@@ -68,10 +68,17 @@ const updateFlowStep = async (req, res) => {
         }
 
         const fields = [
-            'stepId', 'question', 'options', 'position', 
+            'stepId', 'question', 'options', 'nextStep', 'position', 
             'uiData', 'assignmentAction', 'captureMapping', 
-            'captureType', 'tagsOnReach'
+            'captureType', 'tagsOnReach', 'isEntryPoint'
         ];
+
+        if (req.body.isEntryPoint === true) {
+            await FlowStep.updateMany(
+                { flowId: step.flowId, _id: { $ne: step._id } }, 
+                { $set: { isEntryPoint: false } }
+            );
+        }
 
         fields.forEach(field => {
             if (req.body[field] !== undefined) {

@@ -75,14 +75,18 @@ const FlowBuilder = ({ flowId, onBack }) => {
         fetchSpecialties();
     }, [user.token, flowId, fetchSteps]);
 
-    const handleSaveStep = async (stepData) => {
+    const handleSaveStep = useCallback(async (stepData) => {
         const id = stepData._id;
         try {
             const { data } = await axios.put(`${import.meta.env.VITE_API_BASE_URL}/api/flow/${id}`, stepData, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            // Update local state without full refresh if possible
-            setSteps(prev => prev.map(s => s._id === id ? data : s));
+            // Update local state: if data.isEntryPoint is true, unset it on others locally too.
+            setSteps(prev => prev.map(s => {
+                if (s._id === id) return data;
+                if (data.isEntryPoint) return { ...s, isEntryPoint: false };
+                return s;
+            }));
             if (selectedStep?._id === id) setSelectedStep(data);
             
             // Auto open config when a node is selected if it was closed
@@ -90,7 +94,7 @@ const FlowBuilder = ({ flowId, onBack }) => {
         } catch (err) {
             console.error(err);
         }
-    };
+    }, [user.token, selectedStep?._id]);
 
     const deleteStep = async (id) => {
         if (!window.confirm('Delete this neural block?')) return;
@@ -186,6 +190,7 @@ const FlowBuilder = ({ flowId, onBack }) => {
                             flowId={flowId}
                             steps={steps} 
                             onStepsChange={(id, data) => handleSaveStep({ ...steps.find(s => s._id === id), ...data })}
+                            onStepCreated={(newStep) => setSteps((prev) => [...prev, newStep])}
                             token={user.token}
                             onSelectNode={(nodeData) => {
                                 setSelectedStep(nodeData);
@@ -225,6 +230,19 @@ const FlowBuilder = ({ flowId, onBack }) => {
                                                     <Trash2 size={16} />
                                                 </button>
                                             </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between p-3 bg-gray-900/50 border border-gray-800 rounded-xl">
+                                             <div>
+                                                 <h4 className="text-xs font-bold text-white">Entry Point</h4>
+                                                 <p className="text-[10px] text-gray-500">Force flow to start here.</p>
+                                             </div>
+                                             <button 
+                                                 onClick={() => handleSaveStep({ ...selectedStep, isEntryPoint: !selectedStep.isEntryPoint })}
+                                                 className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedStep.isEntryPoint ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'}`}
+                                              >
+                                                  {selectedStep.isEntryPoint ? 'Active Start' : 'Set as Start'}
+                                              </button>
                                         </div>
 
                                         <div>
@@ -423,7 +441,10 @@ const FlowBuilder = ({ flowId, onBack }) => {
                             </div>
 
                             <div className="flex gap-4">
-                                <button className="flex-1 bg-white text-black py-4 rounded-2xl font-black text-sm hover:bg-gray-100 transition-all transform hover:scale-105 active:scale-95 shadow-2xl">
+                                <button 
+                                    onClick={() => alert(`Active Journey Nodes:\n\n${steps.map(s => `${s.stepId}: ${s.question}`).join('\n')}`)}
+                                    className="flex-1 bg-white text-black py-4 rounded-2xl font-black text-sm hover:bg-gray-100 transition-all transform hover:scale-105 active:scale-95 shadow-2xl"
+                                >
                                     View Logic Trace
                                 </button>
                                 <button className="flex items-center justify-center p-4 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-all">

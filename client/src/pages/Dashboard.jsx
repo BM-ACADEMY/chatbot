@@ -6,10 +6,6 @@ import AdminDashboard from '../components/AdminDashboard';
 const Dashboard = () => {
     const { user } = useContext(AuthContext);
 
-    if (!user) {
-        return null;
-    }
-
     return (
         <div className="min-h-screen bg-gray-950 text-white font-sans">
             {user.role === 'admin' ? <AdminDashboard /> : <UserChat />}

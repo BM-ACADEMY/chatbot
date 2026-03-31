@@ -1,0 +1,33 @@
+﻿[
+  {
+    "stepId": "step_1774944037231",
+    "q": "What is your contact number?",
+    "next": "step_1774944648307",
+    "opts": [],
+    "px": 1395,
+    "py": -135
+  },
+  {
+    "stepId": "step_1774944611476",
+    "q": "What is your full name?",
+    "next": "step_1774948941910",
+    "opts": [],
+    "px": 1425,
+    "py": -615
+  },
+  {
+    "stepId": "step_1774944648307",
+    "q": "Where are you located?",
+    "next": "step_1774944611476",
+    "opts": [],
+    "px": 1215,
+    "py": -345
+  },
+  {
+    "stepId": "step_1774948941910",
+    "q": "≡ƒæï Hello! How can I help you today?",
+    "opts": [],
+    "px": 1005,
+    "py": -765
+  }
+]

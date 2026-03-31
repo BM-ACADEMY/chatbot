@@ -9,6 +9,8 @@ const flowStepSchema = new mongoose.Schema({
     stepId: { type: String, required: true },
     flowId: { type: mongoose.Schema.Types.ObjectId, ref: 'Flow', required: true },
     question: { type: String, required: true },
+    isEntryPoint: { type: Boolean, default: false },
+    nextStep: { type: String }, // Root nextStep for non-option/open-response nodes
     type: { type: String, enum: ['message', 'input', 'action'], default: 'message' },
     tagsOnReach: [{ type: String }], // Tags to add to user when they hit this step
     assignmentAction: { type: String }, // e.g. 'sales', 'counselor', 'hr'

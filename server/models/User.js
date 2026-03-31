@@ -4,6 +4,8 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
     phone: { type: String, required: true, unique: true },
+    email: { type: String }, // NEW: Proper Email field
+    address: { type: String }, // NEW: Proper Address field
     password: { type: String, required: true },
     role: { type: String, enum: ['user', 'admin', 'sub-admin'], default: 'user' }, // role-based chat
     tags: [{ type: String }], // e.g. 'Academy Lead', 'Hot Lead'

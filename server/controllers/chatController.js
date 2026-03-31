@@ -36,7 +36,8 @@ const getMessages = async (req, res) => {
 // @access  Private
 const sendMessage = async (req, res) => {
     try {
-        const { receiverId, text, isBotResponse, actionNextStep } = req.body;
+        const { receiverId, text, isBotResponse } = req.body;
+        let { actionNextStep } = req.body;
         const senderId = req.user._id;
 
         const message = await Message.create({
@@ -81,19 +82,53 @@ const sendMessage = async (req, res) => {
 
             let progress = await UserProgress.findOne({ userId: senderId, flowId: activeFlow._id });
             
+            let startStepId = '1';
+            const allSteps = await FlowStep.find({ flowId: activeFlow._id });
+            if (allSteps.length > 0) {
+                const explicitStart = allSteps.find(step => step.isEntryPoint);
+                if (explicitStart) {
+                    startStepId = explicitStart.stepId;
+                } else {
+                    const targetIds = new Set();
+                    allSteps.forEach(step => {
+                        if (step.nextStep) targetIds.add(step.nextStep);
+                        if (step.options && step.options.length > 0) {
+                            step.options.forEach(opt => {
+                                if (opt.nextStep) targetIds.add(opt.nextStep);
+                            });
+                        }
+                    });
+                    
+                    const rootNodes = allSteps.filter(step => !targetIds.has(step.stepId));
+                    if (rootNodes.length > 0) {
+                        const sortedRoots = rootNodes.sort((a, b) => {
+                            if (a.position?.x !== b.position?.x) return (a.position?.x || 0) - (b.position?.x || 0);
+                            return (a.position?.y || 0) - (b.position?.y || 0);
+                        });
+                        startStepId = sortedRoots[0].stepId;
+                    } else {
+                        const sorted = [...allSteps].sort((a, b) => {
+                            if (a.position?.x !== b.position?.x) return (a.position?.x || 0) - (b.position?.x || 0);
+                            return (a.position?.y || 0) - (b.position?.y || 0);
+                        });
+                        startStepId = sorted[0].stepId;
+                    }
+                }
+            }
+
             // Handle Preview Reset
             if (req.body.isReset) {
                 if (progress) {
-                    progress.currentStep = '1';
+                    progress.currentStep = startStepId;
                     progress.completed = false;
                     progress.followUpHistory = [];
                     progress.lastStepId = null;
                     await progress.save();
                 } else {
-                    progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: '1' });
+                    progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: startStepId });
                 }
             } else if (!progress) {
-                progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: '1' });
+                progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: startStepId });
             }
 
         // --- DATA CAPTURE LOGIC ---
@@ -109,6 +144,10 @@ const sendMessage = async (req, res) => {
                         targetUser.name = value;
                     } else if (mapping === 'phone') {
                         targetUser.phone = value;
+                    } else if (mapping === 'email') {
+                        targetUser.email = value;
+                    } else if (mapping === 'address') {
+                        targetUser.address = value;
                     } else if (prevStep.captureType === 'file' || mapping === 'document' || mapping === 'file') {
                         // Store in dedicated documents array
                         targetUser.documents.push({
@@ -122,6 +161,15 @@ const sendMessage = async (req, res) => {
                         targetUser.leadData.set(prevStep.captureMapping, value);
                     }
                     await targetUser.save();
+                }
+            }
+
+            // --- AUTO ADVANCE FOR OPEN RESPONSE NODES ---
+            if (prevStep && (!prevStep.options || prevStep.options.length === 0) && !req.body.isReset && !actionNextStep) {
+                if (prevStep.nextStep) {
+                    actionNextStep = prevStep.nextStep;
+                } else {
+                    actionNextStep = 'end';
                 }
             }
         }
@@ -166,42 +214,42 @@ const sendMessage = async (req, res) => {
                         }
                     }
 
-                    // --- LEAD INTELLIGENCE & ROUTING (Skip for previews to avoid clutter) ---
-                    if (!flowIdToUse) {
-                        const targetUser = await User.findById(senderId);
-                        if (targetUser && (step.tagsOnReach?.length > 0 || step.assignmentAction)) {
-                            let updated = false;
+                    // --- LEAD INTELLIGENCE & ROUTING ---
+                    const targetUser = await User.findById(senderId);
+                    if (targetUser && (step.tagsOnReach?.length > 0 || step.assignmentAction)) {
+                        let updated = false;
 
-                            // Auto-Tagging
-                            if (step.tagsOnReach?.length > 0) {
-                                step.tagsOnReach.forEach(tag => {
-                                    if (!targetUser.tags.includes(tag)) {
-                                        targetUser.tags.push(tag);
-                                        updated = true;
-                                    }
-                                });
-                            }
-
-                            // Lead Assignment
-                            if (step.assignmentAction) {
-                                const specializedAdmin = await User.findOne({ 
-                                    role: { $in: ['admin', 'sub-admin'] }, 
-                                    specialty: step.assignmentAction 
-                                });
-                                if (specializedAdmin) {
-                                    targetUser.assignedTo = specializedAdmin._id;
+                        // Auto-Tagging
+                        if (step.tagsOnReach?.length > 0) {
+                            step.tagsOnReach.forEach(tag => {
+                                if (!targetUser.tags.includes(tag)) {
+                                    targetUser.tags.push(tag);
                                     updated = true;
-                                    
-                                    // Notify the assigned admin!
+                                }
+                            });
+                        }
+
+                        // Lead Assignment & Push Notifications
+                        if (step.assignmentAction) {
+                            const specializedAdmin = await User.findOne({ 
+                                role: { $in: ['admin', 'sub-admin'] }, 
+                                specialty: step.assignmentAction 
+                            });
+                            if (specializedAdmin) {
+                                targetUser.assignedTo = specializedAdmin._id;
+                                updated = true;
+                                
+                                // Notify the assigned admin! (Only for LIVE flows)
+                                if (!flowIdToUse) {
                                     await sendPushNotification(specializedAdmin, {
                                         title: 'New Lead Assigned!',
                                         body: `${targetUser.name} initiated ${step.assignmentAction} flow.`
                                     });
                                 }
                             }
-
-                            if (updated) await targetUser.save();
                         }
+
+                        if (updated) await targetUser.save();
                     }
                     // -----------------------------------
                 }
