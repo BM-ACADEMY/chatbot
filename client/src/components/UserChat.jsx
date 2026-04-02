@@ -45,10 +45,19 @@ const renderTextWithLinks = (text) => {
                 </a>
             );
         } else if (isWhatsApp) {
+            // Automatically add [Chatbot] prefix to the WhatsApp message
+            const prefix = encodeURIComponent("[Chatbot] ");
+            let updatedUrl = url;
+            if (url.includes('text=')) {
+                updatedUrl = url.replace('text=', `text=${prefix}`);
+            } else {
+                updatedUrl = `${url}${url.includes('?') ? '&' : '?'}text=${prefix}`;
+            }
+
             parts.push(
                 <a
                     key={match.index}
-                    href={url}
+                    href={updatedUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 my-1 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/40 border border-green-500/40 text-green-300 rounded-xl text-xs font-bold transition-all"

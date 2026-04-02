@@ -16,8 +16,8 @@ const LeadManager = ({ onViewChat }) => {
     const [leads, setLeads] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterTag, setFilterTag] = useState('');
-    const [sortKey, setSortKey] = useState('name');
-    const [sortDir, setSortDir] = useState('asc');
+    const [sortKey, setSortKey] = useState('createdAt');
+    const [sortDir, setSortDir] = useState('desc');
     const [isLoading, setIsLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -68,11 +68,16 @@ const LeadManager = ({ onViewChat }) => {
         .sort((a, b) => {
             let av = a[sortKey] || '';
             let bv = b[sortKey] || '';
+            
             if (sortKey === 'demo_date') {
                 av = a.leadData?.demo_date || '';
                 bv = b.leadData?.demo_date || '';
             }
-            return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+
+            // Enhanced Comparison (covers Dates and Strings)
+            if (av < bv) return sortDir === 'asc' ? -1 : 1;
+            if (av > bv) return sortDir === 'asc' ? 1 : -1;
+            return 0;
         });
 
     const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
@@ -258,7 +263,7 @@ const LeadManager = ({ onViewChat }) => {
                             ) : paginatedLeads.map((lead, i) => {
                                 const demoDate = lead.leadData?.demo_date;
                                 const demoTime = lead.leadData?.demo_time;
-                                const hasMissing = !lead.phone || !lead.email || !lead.address;
+                                const isCriticalMissing = !lead.name || lead.name === 'Anonymous Lead' || !lead.phone || (lead.phone && lead.phone.startsWith('guest_'));
 
                                 return (
                                     <tr
@@ -273,7 +278,7 @@ const LeadManager = ({ onViewChat }) => {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-bold text-white">{lead.name || <MISSING label="Name" />}</p>
-                                                    {hasMissing && (
+                                                    {isCriticalMissing && (
                                                         <p className="text-[9px] text-amber-500 font-bold uppercase tracking-widest">⚠ Incomplete</p>
                                                     )}
                                                 </div>
@@ -299,7 +304,7 @@ const LeadManager = ({ onViewChat }) => {
                                         {/* Location */}
                                         <td className="px-4 py-3.5">
                                             <span className="text-xs text-gray-400">
-                                                {lead.address || <MISSING label="Location" />}
+                                                {lead.address || lead.leadData?.location || <MISSING label="Location" />}
                                             </span>
                                         </td>
 

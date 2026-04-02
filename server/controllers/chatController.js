@@ -68,6 +68,7 @@ const sendMessage = async (req, res) => {
         }
 
         let botResponse = null;
+        let userForInjection = req.user;
 
         if (!receiverId && (req.user.role === 'user' || req.body.previewFlowId) && !isBotResponse) {
             // Find Active Flow or Preview Flow
@@ -127,6 +128,14 @@ const sendMessage = async (req, res) => {
                 } else {
                     progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: startStepId });
                 }
+
+                // NEW: Reset user name to Anonymous Lead on journey reset
+                const targetUser = await User.findById(senderId);
+                if (targetUser && (targetUser.phone.startsWith('guest_') || targetUser.name !== 'Anonymous Lead')) {
+                    targetUser.name = 'Anonymous Lead';
+                    await targetUser.save();
+                    userForInjection = targetUser; // ENSURE the reset name is used for the greeting
+                }
             } else if (!progress) {
                 progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: startStepId });
             }
@@ -146,7 +155,7 @@ const sendMessage = async (req, res) => {
                         targetUser.phone = value;
                     } else if (mapping === 'email') {
                         targetUser.email = value;
-                    } else if (mapping === 'address') {
+                    } else if (mapping === 'address' || mapping === 'location') {
                         targetUser.address = value;
                     } else if (prevStep.captureType === 'file' || mapping === 'document' || mapping === 'file') {
                         // Store in dedicated documents array
@@ -162,6 +171,7 @@ const sendMessage = async (req, res) => {
                     }
                     try {
                         await targetUser.save();
+                        userForInjection = targetUser; // UPDATE REFERENCE!
                     } catch (saveErr) {
                         if (saveErr.code === 11000) {
                             // E11000 duplicate key error. Save to leadData instead to avoid crashing the flow
@@ -205,7 +215,7 @@ const sendMessage = async (req, res) => {
                     const admin = await User.findOne({ role: 'admin' });
                     const botSenderId = admin ? admin._id : senderId;
 
-                    const personalizedText = injectVariables(step.question, req.user);
+                    const personalizedText = injectVariables(step.question, userForInjection);
 
                     botResponse = await Message.create({
                         senderId: botSenderId,
