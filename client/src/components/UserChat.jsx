@@ -420,9 +420,9 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
             {!isEmbedded ? (
                 <header className="flex items-center justify-between p-5 bg-gray-900 border-b border-gray-800 shadow-md z-10 shrink-0">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-xl border border-white/5">
+                        {/* <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-xl border border-white/5">
                             <Bot className="text-white" size={28} />
-                        </div>
+                        </div> */}
                         <div>
                             <h1 className="text-lg font-black tracking-tight text-white">ABM Connect</h1>
                             <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
