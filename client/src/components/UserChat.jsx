@@ -235,6 +235,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
     const [isUploading, setIsUploading] = useState(false);
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
+    const hasInitialized = useRef(false);
 
     // Get the last bot message to determine what input the bot expects
     const lastBotMsg = [...messages].reverse().find(m => m.isBotResponse);
@@ -247,7 +248,46 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
         if (isEmbedded) {
             logout(); // for guests, this creates a fully new lead profile
         } else {
+            hasInitialized.current = false; // Allow re-init for manual reset if needed, though sendMessage(null, true) handles it
             sendMessage(null, true);
+        }
+    };
+
+    const sendMessage = async (e, isReset = false, fileMetaData = null) => {
+        if (e) e.preventDefault();
+        if (!input.trim() && !isReset && !fileMetaData) return;
+        if (inputError) return; // Block submission if validation fails
+
+        try {
+            const payload = {
+                receiverId: null,
+                text: isReset ? 'Resetting journey...' : (fileMetaData ? `Uploaded: ${fileMetaData.name}` : input),
+                actionNextStep: null,
+                previewFlowId,
+                isReset,
+                fileUrl: fileMetaData?.url,
+                fileType: fileMetaData?.type,
+                fileName: fileMetaData?.name
+            };
+
+            const { data } = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/messages`, payload, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+
+            socket.emit('send_message', data.message);
+            if (isReset) {
+                setMessages([data.message]);
+            } else {
+                setMessages((prev) => [...prev, data.message]);
+            }
+            setInput('');
+
+            if (data.botResponse) {
+                socket.emit('send_message', data.botResponse);
+                setMessages((prev) => [...prev, data.botResponse]);
+            }
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -256,7 +296,13 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
             const { data } = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/messages/${user._id}`, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            setMessages(data);
+            if (data.length === 0 && !hasInitialized.current) {
+                hasInitialized.current = true;
+                await sendMessage(null, true);
+            } else if (data.length > 0) {
+                setMessages(data);
+                hasInitialized.current = true;
+            }
         } catch (error) {
             console.error("Error fetching messages", error);
         }
@@ -265,9 +311,10 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
     useEffect(() => {
         if (user) {
             socket.emit('join_room', user._id);
-            if (previewFlowId) {
+            if (previewFlowId && !hasInitialized.current) {
+                hasInitialized.current = true;
                 sendMessage(null, true);
-            } else {
+            } else if (!previewFlowId) {
                 fetchHistory();
             }
         }
@@ -355,44 +402,6 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
         }
     };
 
-    const sendMessage = async (e, isReset = false, fileMetaData = null) => {
-        if (e) e.preventDefault();
-        if (!input.trim() && !isReset && !fileMetaData) return;
-        if (inputError) return; // Block submission if validation fails
-
-        try {
-            const payload = {
-                receiverId: null,
-                text: isReset ? 'Resetting journey...' : (fileMetaData ? `Uploaded: ${fileMetaData.name}` : input),
-                actionNextStep: null,
-                previewFlowId,
-                isReset,
-                fileUrl: fileMetaData?.url,
-                fileType: fileMetaData?.type,
-                fileName: fileMetaData?.name
-            };
-
-            const { data } = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/messages`, payload, {
-                headers: { Authorization: `Bearer ${user.token}` }
-            });
-
-            socket.emit('send_message', data.message);
-            if (isReset) {
-                setMessages([data.message]);
-            } else {
-                setMessages((prev) => [...prev, data.message]);
-            }
-            setInput('');
-
-            if (data.botResponse) {
-                socket.emit('send_message', data.botResponse);
-                setMessages((prev) => [...prev, data.botResponse]);
-            }
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
     const handleOptionSelect = async (option) => {
         try {
             const { data } = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/messages`, {
@@ -454,7 +463,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
 
             {/* Messages */}
             <main className={`flex-1 overflow-y-auto p-5 space-y-6 ${isEmbedded ? 'bg-gray-900' : 'bg-gray-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-gray-950'}`}>
-                {messages.map((msg, index) => {
+                {messages.filter(msg => msg.text !== 'Resetting journey...').map((msg, index) => {
                     const isUser = msg.senderId === user._id && !msg.isBotResponse;
                     return (
                         <div key={index} className={`flex ${isUser ? 'justify-end' : 'justify-start'} w-full animate-in fade-in slide-in-from-bottom-2 duration-300`}>
