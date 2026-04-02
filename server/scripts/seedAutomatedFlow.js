@@ -13,7 +13,7 @@ const seedFlow = async () => {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('Connected to MongoDB');
 
-        const flowName = "ABM Groups Master Automation";
+        const flowName = "BM Academy Master Flow";
         let flow = await Flow.findOne({ name: flowName });
         if (flow) {
             console.log('Cleaning up existing flow steps...');
@@ -21,7 +21,7 @@ const seedFlow = async () => {
         } else {
             flow = await Flow.create({ 
                 name: flowName, 
-                description: "Main business automation for ABM Groups",
+                description: "Full workflow for BM Academy with multi-course branches",
                 isActive: true,
                 isPublished: true
             });
@@ -29,277 +29,309 @@ const seedFlow = async () => {
 
         const flowId = flow._id;
 
-        // --- STAGE 0: DATA COLLECTION ---
+        // --- STAGE 1: GREETING & USER DETAILS ---
         const stepName = await FlowStep.create({
             flowId,
             stepId: 'start_name',
-            question: "👋 Welcome to ABM Groups 🚀\n\nTo better assist you, may I have your **Full Name**?",
+            question: "👋 Hi! Welcome to BM Academy 🚀\nWe’re excited to help you grow your career and skills!\n👉 May I know your name?",
             captureMapping: 'name',
             isEntryPoint: true,
             position: { x: 0, y: 0 }
         });
 
-        const stepEmail = await FlowStep.create({
+        const stepPhone = await FlowStep.create({
             flowId,
-            stepId: 'get_email',
-            question: "Thanks {name}! And your **Email Address** please?",
-            captureMapping: 'email',
+            stepId: 'get_phone',
+            question: "😊 Thank you, {name}!\n👉 Could you please share your phone number?",
+            captureMapping: 'phone',
             position: { x: 350, y: 0 }
         });
-        stepName.nextStep = 'get_email';
+        stepName.nextStep = 'get_phone';
         await stepName.save();
 
-        const stepAddress = await FlowStep.create({
+        const stepLocation = await FlowStep.create({
             flowId,
-            stepId: 'get_address',
-            question: "Got it. What's your **Location/Address**?",
-            captureMapping: 'address',
+            stepId: 'get_location',
+            question: "📞 Thanks, {name}!\n👉 Please tell us your location (City/Area)",
+            captureMapping: 'location',
             position: { x: 700, y: 0 }
         });
-        stepEmail.nextStep = 'get_address';
-        await stepEmail.save();
+        stepPhone.nextStep = 'get_location';
+        await stepPhone.save();
 
-        // --- STAGE 1: MASTER ENTRY ---
+        // --- STAGE 2: SERVICE SELECTION ---
         const stepMaster = await FlowStep.create({
             flowId,
             stepId: 'master_entry',
-            question: "Excellent! We help you with:\n🎓 Career & Courses\n📈 Business Growth\n🏡 Property Investment\n💼 Jobs & Skill Development\n\n👉 **What are you looking for today?**",
+            question: "📍 Got it, {name}! Thanks for sharing.\n\nHere’s how we can help you 👇\n✨ We help you with:\n\n👉 What are you looking for today?",
             options: [
-                { label: '1️⃣ Courses (BM Academy)', nextStep: 'academy_entry' },
-                { label: '2️⃣ Marketing (BM TechX)', nextStep: 'techx_entry' },
-                { label: '3️⃣ Real Estate', nextStep: 'realestate_entry' },
-                { label: '4️⃣ Jobs (Core Talent)', nextStep: 'coretalent_entry' },
-                { label: '5️⃣ Talk to Team', nextStep: 'talk_to_team' }
+                { label: '🎓 Career & Courses', nextStep: 'academy_courses' },
+                { label: '📈 Business Growth', nextStep: 'techx_stub' },
+                { label: '🏡 Property Investment', nextStep: 'realestate_stub' },
+                { label: '💼 Jobs & Skill Development', nextStep: 'jobs_stub' }
             ],
             position: { x: 1050, y: 0 }
         });
-        stepAddress.nextStep = 'master_entry';
-        await stepAddress.save();
+        stepLocation.nextStep = 'master_entry';
+        await stepLocation.save();
 
-        // --- BM ACADEMY FLOW ---
-        const academyEntry = await FlowStep.create({
+        // Stubs for STAGE 2 options not detailed
+        await FlowStep.create({
             flowId,
-            stepId: 'academy_entry',
-            question: "👋 Hi! Welcome to **BM Academy** 🚀\nPondicherry’s 1st AI-powered Career Academy\n\nWe help you:\n💰 Earn high-income skills\n💼 Get job opportunities\n📈 Start freelancing/business\n\n👉 **What are you looking for?**",
-            tagsOnReach: ['BM Academy'],
-            options: [
-                { label: '1️⃣ AI Courses', nextStep: 'academy_ai' },
-                { label: '2️⃣ Digital Marketing', nextStep: 'academy_dm' },
-                { label: '3️⃣ Full Stack Development', nextStep: 'academy_fs' },
-                { label: '4️⃣ Fees & Duration', nextStep: 'academy_fees' },
-                { label: '5️⃣ Placement Details', nextStep: 'academy_placement' },
-                { label: '6️⃣ Talk to Counselor', nextStep: 'talk_to_team' }
-            ],
+            stepId: 'techx_stub',
+            question: "Working on Business Growth... Our expert will connect with you soon!",
+            nextStep: 'final_thanks',
             position: { x: 1400, y: -450 }
         });
-
         await FlowStep.create({
             flowId,
-            stepId: 'academy_ai',
-            question: "🔥 **AI Course:**\n\n✔️ ChatGPT + AI Tools\n✔️ Automation skills\n✔️ Freelancing methods\n✔️ Beginner friendly\n\n⏳ **Duration:** 30–45 Days\n\n👉 **Next:**",
+            stepId: 'realestate_stub',
+            question: "Working on Property Investment... Our expert will connect with you soon!",
+            nextStep: 'final_thanks',
+            position: { x: 1400, y: -300 }
+        });
+        await FlowStep.create({
+            flowId,
+            stepId: 'jobs_stub',
+            question: "Working on Jobs & Skill Development... Our expert will connect with you soon!",
+            nextStep: 'final_thanks',
+            position: { x: 1400, y: -150 }
+        });
+
+        // --- STAGE 3: CAREER & COURSES ---
+        await FlowStep.create({
+            flowId,
+            stepId: 'academy_courses',
+            question: "🎓 Great choice, {name}!\nWelcome to BM Academy 🚀\nWe provide industry-ready training programs with practical learning, placement guidance, and real-world skills.\n👉 Please choose a course:",
             options: [
-                { label: '1️⃣ Fees', nextStep: 'academy_fees' },
-                { label: '2️⃣ Syllabus', nextStep: 'academy_syllabus' },
-                { label: '3️⃣ Talk to Expert', nextStep: 'talk_to_team' }
+                { label: 'Digital Marketing (DM)', nextStep: 'course_dm' },
+                { label: 'Full Stack Development (FSD)', nextStep: 'course_fsd' },
+                { label: 'Data Analytics (DA)', nextStep: 'course_da' },
+                { label: 'Video Editing', nextStep: 'course_ve' }
             ],
-            position: { x: 1750, y: -650 }
+            position: { x: 1400, y: 200 }
         });
 
+        // ==========================================
+        // 1. DIGITAL MARKETING FLOW
+        // ==========================================
         await FlowStep.create({
             flowId,
-            stepId: 'academy_dm',
-            question: "📈 **Digital Marketing:**\n\n✔️ Meta Ads + Google Ads\n✔️ Instagram growth\n✔️ Lead generation\n✔️ Real projects\n\n⏳ **Duration:** 45–60 Days\n\n👉 **Next:**",
+            stepId: 'course_dm',
+            question: "🔥 Excellent choice, {name}!\nOur Digital Marketing Course helps you master online marketing skills and start your career or business.\n📚 Key Topics Covered:\nSEO \nSMM\nPAID ADS\nSEM \netc...\n👉 What would you like to know next?",
             options: [
-                { label: '1️⃣ Fees', nextStep: 'academy_fees' },
-                { label: '2️⃣ Syllabus', nextStep: 'academy_syllabus' },
-                { label: '3️⃣ Talk to Expert', nextStep: 'talk_to_team' }
+                { label: 'Fees', nextStep: 'dm_fees' },
+                { label: 'Syllabus', nextStep: 'dm_syllabus' },
+                { label: 'Contact Mentor', nextStep: 'contact_dm' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1750, y: -450 }
+            position: { x: 1800, y: 0 }
         });
 
         await FlowStep.create({
             flowId,
-            stepId: 'academy_fs',
-            question: "💻 **Full Stack Development:**\n\n✔️ Frontend + Backend\n✔️ Live projects\n✔️ Portfolio building\n✔️ Placement training\n\n⏳ **Duration:** 3–6 Months\n\n👉 **Next:**",
+            stepId: 'dm_fees',
+            question: "💰 Our Digital Marketing Course starts from ₹14,999\n✅ Includes:\nAdvanced practical training\nReal-time projects\nPlacement guidance\nInterview preparation\nSoft skills training\n👉 What would you like to do next?",
             options: [
-                { label: '1️⃣ Fees', nextStep: 'academy_fees' },
-                { label: '2️⃣ Syllabus', nextStep: 'academy_syllabus' },
-                { label: '3️⃣ Talk to Expert', nextStep: 'talk_to_team' }
+                { label: 'Syllabus', nextStep: 'dm_syllabus' },
+                { label: 'Contact Mentor', nextStep: 'contact_dm' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1750, y: -250 }
+            position: { x: 2200, y: -100 }
         });
 
         await FlowStep.create({
             flowId,
-            stepId: 'academy_fees',
-            question: "💰 **Fees Details:**\n\n✔️ Budget-friendly pricing\n✔️ EMI options available\n✔️ Scholarship seats (limited 🎯)\n\n👉 Fees vary based on:\n• Course\n• Batch type\n• Current offers\n\n👉 **What do you want?**",
+            stepId: 'dm_syllabus',
+            question: "📄 Here is the detailed syllabus for the Digital Marketing Course 👇\n👉 [Download Syllabus PDF](https://bmacademy.com/syllabus/digital-marketing.pdf)\nLet me know if you need any clarification 😊",
             options: [
-                { label: '1️⃣ Exact Fees', nextStep: 'talk_to_team' },
-                { label: '2️⃣ Offers Available', nextStep: 'talk_to_team' },
-                { label: '3️⃣ Book FREE Call', nextStep: 'talk_to_team' }
+                { label: 'Contact Mentor', nextStep: 'contact_dm' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 2100, y: -500 }
+            position: { x: 2200, y: 50 }
         });
 
         await FlowStep.create({
             flowId,
-            stepId: 'academy_syllabus',
-            question: "📚 **Course Syllabus:**\n\n✔️ Step-by-step training\n✔️ Practical sessions\n✔️ Interview prep\n\n👉 **Download full syllabus here 👇**\n[https://bmacademy.com/syllabus.pdf]",
-            position: { x: 2100, y: -250 }
+            stepId: 'contact_dm',
+            question: "👨‍🏫 Sure, {name}!\nYou can directly connect with our mentor for guidance:\n[📞 Call Now](tel:+919403892971)\n[💬 WhatsApp Us](https://wa.me/919944940051?text=Hi!%20I%20am%20interested%20in%20the%20Digital%20Marketing%20Course)\n\nFeel free to ask any doubts anytime 👍",
+            nextStep: 'final_thanks',
+            position: { x: 2200, y: 200 }
         });
 
+        // ==========================================
+        // 2. FULL STACK DEVELOPMENT FLOW
+        // ==========================================
         await FlowStep.create({
             flowId,
-            stepId: 'academy_placement',
-            question: "🎯 **Placement Support:**\n\n✔️ Resume building\n✔️ Mock interviews\n✔️ Job referrals\n\n💼 Students are now:\n→ Working in companies\n→ Freelancing\n\n👉 **Want guidance?**",
+            stepId: 'course_fsd',
+            question: "💻 Awesome choice, {name}!\nOur Full Stack Development Course helps you build websites and applications from scratch.\n📚 Key Topics Covered:\nHTML, CSS, JavaScript\nFrontend (React / UI Development)\nBackend Development (Node / APIs)\nDatabase (MongoDB / SQL)\nDeployment & Hosting\netc...\n👉 What would you like to know next?",
             options: [
-                { label: '1️⃣ Yes explain', nextStep: 'talk_to_team' },
-                { label: '2️⃣ Book call', nextStep: 'talk_to_team' }
+                { label: 'Fees', nextStep: 'fsd_fees' },
+                { label: 'Syllabus', nextStep: 'fsd_syllabus' },
+                { label: 'Contact Mentor', nextStep: 'contact_fsd' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1750, y: -50 }
+            position: { x: 1800, y: 400 }
         });
 
-
-        // --- BM TECHX FLOW ---
-        const techxEntry = await FlowStep.create({
+        await FlowStep.create({
             flowId,
-            stepId: 'techx_entry',
-            question: "👋 Hi! Welcome to **BM TechX** 🚀\nYour Growth Partner for Business & Marketing\n\nWe help you:\n📈 Generate quality leads\n💻 Build high-converting websites\n📊 Scale your business with ads\n🎯 Improve branding & presence\n\n👉 **What are you looking for?**",
-            tagsOnReach: ['BM TechX'],
+            stepId: 'fsd_fees',
+            question: "💰 Our Full Stack Development Course starts from ₹18,999\n✅ Includes:\nLive project building\nReal-world coding practice\nPlacement support\nInterview preparation\nSoft skills training\n👉 What would you like to do next?",
             options: [
-                { label: '1️⃣ Lead Generation (Ads)', nextStep: 'techx_leadgen' },
-                { label: '2️⃣ Social Media Marketing', nextStep: 'techx_smm' },
-                { label: '3️⃣ Website Development', nextStep: 'techx_webdev' },
-                { label: '4️⃣ Branding', nextStep: 'techx_branding' },
-                { label: '5️⃣ Pricing Details', nextStep: 'techx_pricing' },
-                { label: '6️⃣ Talk to Expert', nextStep: 'talk_to_team' }
+                { label: 'Syllabus', nextStep: 'fsd_syllabus' },
+                { label: 'Contact Mentor', nextStep: 'contact_fsd' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1400, y: 300 }
+            position: { x: 2200, y: 400 }
         });
 
-        // TECHX: LEAD GEN
         await FlowStep.create({
             flowId,
-            stepId: 'techx_leadgen',
-            question: "🔥 **Lead Generation Service:**\n\n✔️ Meta Ads (Facebook & Instagram)\n✔️ High-quality enquiry leads\n✔️ Local targeting (Tamil Nadu & Pondy)\n✔️ Budget optimization strategy\n\n💰 **Starting from ₹4,500**\n\n👉 **Next:**",
+            stepId: 'fsd_syllabus',
+            question: "📄 Here is the detailed syllabus for the Full Stack Development Course 👇\n👉 [Download Syllabus PDF](https://bmacademy.com/syllabus/full-stack-development.pdf)\nLet me know if you need any clarification 😊",
             options: [
-                { label: '1️⃣ Case Studies', nextStep: 'techx_case_studies' },
-                { label: '2️⃣ Pricing Details', nextStep: 'techx_pricing' },
-                { label: '3️⃣ Free Consultation', nextStep: 'talk_to_team' }
+                { label: 'Contact Mentor', nextStep: 'contact_fsd' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1800, y: 150 }
+            position: { x: 2200, y: 550 }
         });
 
-        // TECHX: SMM
         await FlowStep.create({
             flowId,
-            stepId: 'techx_smm',
-            question: "📱 **Social Media Growth:**\n\n✔️ Content creation (Post + Reels)\n✔️ Instagram growth strategy\n✔️ Engagement boosting\n✔️ Brand positioning\n\n👉 **Next:**",
+            stepId: 'contact_fsd',
+            question: "👨‍🏫 Sure, {name}!\nYou can directly connect with our mentor for guidance:\n[📞 Call Now](tel:+919403892971)\n[💬 WhatsApp Us](https://wa.me/919944940051?text=Hi!%20I%20am%20interested%20in%20the%20Full%20Stack%20Development%20Course)\n\nFeel free to ask any doubts anytime 👍",
+            nextStep: 'final_thanks',
+            position: { x: 2200, y: 700 }
+        });
+
+        // ==========================================
+        // 3. DATA ANALYTICS FLOW
+        // ==========================================
+        await FlowStep.create({
+            flowId,
+            stepId: 'course_da',
+            question: "📊 Great choice, {name}!\nOur Data Analytics Course helps you analyze data, create insights, and build a high-demand career.\n📚 Key Topics Covered:\nExcel & Advanced Excel\nSQL\n(Power BI / Tableau)\nPython for Data Analysis\nStatistics Basics\netc...\n👉 What would you like to know next?",
             options: [
-                { label: '1️⃣ Pricing', nextStep: 'techx_pricing' },
-                { label: '2️⃣ Portfolio', nextStep: 'techx_case_studies' },
-                { label: '3️⃣ Talk to Expert', nextStep: 'talk_to_team' }
+                { label: 'Fees', nextStep: 'da_fees' },
+                { label: 'Syllabus', nextStep: 'da_syllabus' },
+                { label: 'Contact Mentor', nextStep: 'contact_da' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1800, y: 320 }
+            position: { x: 1800, y: 900 }
         });
 
-        // TECHX: WEB DEV
         await FlowStep.create({
             flowId,
-            stepId: 'techx_webdev',
-            question: "🌐 **Website Development:**\n\n✔️ Business websites\n✔️ Landing pages (Lead focused)\n✔️ Mobile optimized\n✔️ SEO-ready structure\n\n💰 **Starting from ₹2,999**\n\n👉 **Next:**",
+            stepId: 'da_fees',
+            question: "💰 Our Data Analytics Course starts from ₹22,999\n✅ Includes:\nPractical data projects\nReal-time case studies\nPlacement guidance\nInterview preparation\nSoft skills training\n👉 What would you like to do next?",
             options: [
-                { label: '1️⃣ Demo Websites', nextStep: 'techx_case_studies' },
-                { label: '2️⃣ Pricing', nextStep: 'techx_pricing' },
-                { label: '3️⃣ Talk to Expert', nextStep: 'talk_to_team' }
+                { label: 'Syllabus', nextStep: 'da_syllabus' },
+                { label: 'Contact Mentor', nextStep: 'contact_da' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1800, y: 490 }
+            position: { x: 2200, y: 900 }
         });
 
-        // TECHX: BRANDING
         await FlowStep.create({
             flowId,
-            stepId: 'techx_branding',
-            question: "🎨 **Branding Services:**\n\n✔️ Logo design\n✔️ Brand identity\n✔️ Creative ad designs\n✔️ Business positioning\n\n👉 **Next:**",
+            stepId: 'da_syllabus',
+            question: "📄 Here is the detailed syllabus for the Data Analytics Course 👇\n👉 [Download Syllabus PDF](https://bmacademy.com/syllabus/data-analytics.pdf)\nLet me know if you need any clarification 😊",
             options: [
-                { label: '1️⃣ Portfolio', nextStep: 'techx_case_studies' },
-                { label: '2️⃣ Pricing', nextStep: 'techx_pricing' },
-                { label: '3️⃣ Free Consultation', nextStep: 'talk_to_team' }
+                { label: 'Contact Mentor', nextStep: 'contact_da' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1800, y: 660 }
+            position: { x: 2200, y: 1050 }
         });
 
-        // TECHX: PRICING
         await FlowStep.create({
             flowId,
-            stepId: 'techx_pricing',
-            question: "💰 **Pricing Details:**\n\n✔️ Affordable packages\n✔️ Custom plans available\n✔️ ROI-focused strategy\n\n🔥 **Today Bonus:**\nFree strategy + competitor analysis 🎯\n\n👉 **What do you want?**",
-            tagsOnReach: ['Interested in TechX Pricing'],
+            stepId: 'contact_da',
+            question: "👨‍🏫 Sure, {name}!\nYou can directly connect with our mentor for guidance:\n[📞 Call Now](tel:+919403892971)\n[💬 WhatsApp Us](https://wa.me/919944940051?text=Hi!%20I%20am%20interested%20in%20the%20Data%20Analytics%20Course)\n\nFeel free to ask any doubts anytime 👍",
+            nextStep: 'final_thanks',
+            position: { x: 2200, y: 1200 }
+        });
+
+        // ==========================================
+        // 4. VIDEO EDITING FLOW
+        // ==========================================
+        await FlowStep.create({
+            flowId,
+            stepId: 'course_ve',
+            question: "🎬 Super choice, {name}!\nOur Video Editing Course helps you create professional videos for social media, YouTube, and business.\n📚 Key Topics Covered:\nEditing Basics & Timeline\nTransitions & Effects\nColor Correction & Grading\nAudio Editing\nReels & YouTube Editing\netc...\n👉 What would you like to know next?",
             options: [
-                { label: '1️⃣ Exact Pricing', nextStep: 'talk_to_team' },
-                { label: '2️⃣ Offers Available', nextStep: 'talk_to_team' },
-                { label: '3️⃣ Book FREE Call', nextStep: 'talk_to_team' }
+                { label: 'Fees', nextStep: 've_fees' },
+                { label: 'Syllabus', nextStep: 've_syllabus' },
+                { label: 'Contact Mentor', nextStep: 'contact_ve' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 2200, y: 350 }
+            position: { x: 1800, y: 1400 }
         });
 
-        // TECHX: PROOF
         await FlowStep.create({
             flowId,
-            stepId: 'techx_case_studies',
-            question: "📊 **Our Results:**\n\n✔️ Generated high-quality leads\n✔️ Reduced cost per lead\n✔️ Increased client conversions\n✔️ Worked with real estate & local businesses\n\n👉 **Want to see proof?**",
+            stepId: 've_fees',
+            question: "💰 Our Video Editing Course starts from ₹14,999\n✅ Includes:\nHands-on editing practice\nReal-time projects\nPortfolio creation\nFreelancing guidance\nSoft skills training\n👉 What would you like to do next?",
             options: [
-                { label: '1️⃣ Case Studies', nextStep: 'talk_to_team' },
-                { label: '2️⃣ Client Results', nextStep: 'talk_to_team' },
-                { label: '3️⃣ Talk to Expert', nextStep: 'talk_to_team' }
+                { label: 'Syllabus', nextStep: 've_syllabus' },
+                { label: 'Contact Mentor', nextStep: 'contact_ve' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 2200, y: 600 }
+            position: { x: 2200, y: 1400 }
         });
 
-        // TECHX: OBJECTION
         await FlowStep.create({
             flowId,
-            stepId: 'techx_objection_worth',
-            question: "Good question 👍\n\nWe focus on:\n✔️ Real business results\n✔️ ROI-driven marketing\n✔️ Quality leads (not just numbers)\n\n👉 **Want to see results or talk to expert?**",
-            position: { x: 2200, y: 150 }
-        });
-
-
-        // --- GLOBAL TEAM NODE ---
-        await FlowStep.create({
-            flowId,
-            stepId: 'talk_to_team',
-            question: "📞 **Let's grow your business together!**\n\n👉 Book FREE strategy call:\n[https://calendly.com/bm-groups]\n\nOR\n\nSend:\n✔️ Name\n✔️ Business type\n\nOur expert will contact you 📲",
-            assignmentAction: 'sales', 
-            position: { x: 2600, y: 250 }
-        });
-
-        // --- OTHER ENTRIES ---
-        await FlowStep.create({
-            flowId,
-            stepId: 'realestate_entry',
-            question: "👋 Welcome to **Real Estate with Kamar** 🏡\nYour Trusted Property Partner in Pondicherry\n\n👉 **What are you looking for?**",
-            tagsOnReach: ['Real Estate'],
+            stepId: 've_syllabus',
+            question: "📄 Here is the detailed syllabus for the Video Editing Course 👇\n👉 [Download Syllabus PDF](https://bmacademy.com/syllabus/video-editing.pdf)\nLet me know if you need any clarification 😊",
             options: [
-                { label: '1️⃣ Buy Property', nextStep: 'talk_to_team' },
-                { label: '2️⃣ Sell Property', nextStep: 'talk_to_team' }
+                { label: 'Contact Mentor', nextStep: 'contact_ve' },
+                { label: 'Book Demo Session', nextStep: 'demo_date' }
             ],
-            position: { x: 1400, y: 1000 }
+            position: { x: 2200, y: 1550 }
         });
 
         await FlowStep.create({
             flowId,
-            stepId: 'coretalent_entry',
-            question: "👋 Welcome to **Core Talent** 💼\nYour Career Growth Partner 🚀\n\n👉 **What are you looking for?**",
-            tagsOnReach: ['Core Talent'],
-            options: [
-                { label: '1️⃣ Find Jobs', nextStep: 'talk_to_team' },
-                { label: '2️⃣ Skill Training', nextStep: 'talk_to_team' }
-            ],
-            position: { x: 1400, y: 1300 }
+            stepId: 'contact_ve',
+            question: "👨‍🏫 Sure, {name}!\nYou can directly connect with our mentor for guidance:\n[📞 Call Now](tel:+919403892971)\n[💬 WhatsApp Us](https://wa.me/919944940051?text=Hi!%20I%20am%20interested%20in%20the%20Video%20Editing%20Course)\n\nFeel free to ask any doubts anytime 👍",
+            nextStep: 'final_thanks',
+            position: { x: 2200, y: 1700 }
         });
 
-        console.log('BM TechX Flow Seeded Successfully!');
+        // ==========================================
+        // DEMO SESSION & CALENDAR (COMMON)
+        // ==========================================
+        await FlowStep.create({
+            flowId,
+            stepId: 'demo_date',
+            question: "📅 Great decision, {name}!\n👉 Please select your preferred date for the demo session:",
+            captureMapping: 'demo_date', // Open text field saves to demo_date
+            nextStep: 'demo_time',
+            position: { x: 2600, y: 600 }
+        });
+
+        await FlowStep.create({
+            flowId,
+            stepId: 'demo_time',
+            question: "⏰ Please select your preferred time slot for the demo session:",
+            captureMapping: 'demo_time',
+            nextStep: 'final_thanks',
+            position: { x: 3000, y: 600 }
+        });
+
+        // ==========================================
+        // FINAL THANK YOU
+        // ==========================================
+        await FlowStep.create({
+            flowId,
+            stepId: 'final_thanks',
+            question: "🙏 Thank you, {name}!\nWe’re happy to assist you.\nOur team will guide you throughout your learning journey 🚀\nIf you have any questions, feel free to message us anytime 😊",
+            position: { x: 3400, y: 600 }
+        });
+
+        console.log('BM Academy Master Flow with all Courses Seeded Successfully!');
         process.exit();
     } catch (err) {
         console.error('Seeding failed:', err);

@@ -160,7 +160,24 @@ const sendMessage = async (req, res) => {
                         if (!targetUser.leadData) targetUser.leadData = new Map();
                         targetUser.leadData.set(prevStep.captureMapping, value);
                     }
-                    await targetUser.save();
+                    try {
+                        await targetUser.save();
+                    } catch (saveErr) {
+                        if (saveErr.code === 11000) {
+                            // E11000 duplicate key error. Save to leadData instead to avoid crashing the flow
+                            if (!targetUser.leadData) targetUser.leadData = new Map();
+                            targetUser.leadData.set(`duplicate_${mapping}`, value);
+                            
+                            // Revert the main fields that caused the crash
+                            const targetUserOld = await User.findById(senderId);
+                            targetUser.phone = targetUserOld.phone;
+                            targetUser.email = targetUserOld.email;
+                            
+                            await targetUser.save();
+                        } else {
+                            throw saveErr;
+                        }
+                    }
                 }
             }
 
@@ -196,6 +213,7 @@ const sendMessage = async (req, res) => {
                         text: personalizedText,
                         isBotResponse: true,
                         captureType: step.captureType || 'text',
+                        captureMapping: step.captureMapping || null,
                         options: step.options
                     });
 

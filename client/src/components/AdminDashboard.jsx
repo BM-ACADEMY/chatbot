@@ -39,14 +39,15 @@ const AdminDashboard = () => {
             {/* MOBILE MENU TOGGLE */}
             <button 
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="md:hidden fixed top-4 right-4 z-[60] p-3 bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl text-blue-400"
+                className={`md:hidden fixed top-4 right-4 z-[60] p-3 bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl text-blue-400 ${activeTab === 'builder' ? 'hidden' : ''}`}
             >
                 {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
 
             {/* SIDEBAR */}
             <aside className={`
-                fixed md:relative z-50 w-64 h-full bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-300
+                fixed md:relative z-50 h-full bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-300
+                ${activeTab === 'builder' ? 'w-0 overflow-hidden border-none opacity-0' : 'w-64'}
                 ${isMobileMenuOpen ? 'left-0' : '-left-64 md:left-0'}
             `}>
                 <div className="p-6 border-b border-gray-800 flex items-center gap-3">

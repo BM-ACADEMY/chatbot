@@ -7,6 +7,7 @@ const messageSchema = new mongoose.Schema({
     fileUrl: { type: String }, // URL to uploaded document
     fileType: { type: String }, // e.g. 'image/png', 'application/pdf'
     captureType: { type: String, enum: ['text', 'file'], default: 'text' }, // What format the bot expects next
+    captureMapping: { type: String }, // What field the bot is capturing: name, phone, email, demo_date, demo_time etc.
     isBotResponse: { type: Boolean, default: false },
     options: [{
         label: String,

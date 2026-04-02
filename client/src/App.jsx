@@ -4,6 +4,7 @@ import { useContext } from 'react';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Widget from './pages/Widget';
 import BackButton from './components/BackButton';
 
 const ProtectedRoute = ({ children }) => {
@@ -35,6 +36,7 @@ function App() {
         <div className="relative">
           <BackButton />
           <Routes>
+            <Route path="/widget" element={<Widget />} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

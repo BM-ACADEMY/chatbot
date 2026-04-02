@@ -66,19 +66,20 @@ const FlowManager = ({ onEdit }) => {
     };
 
     return (
-        <div className="p-8 h-full overflow-y-auto relative z-10 w-full max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-8">
-                <div>
-                    <h1 className="text-3xl font-bold text-white">Flow Management</h1>
-                    <p className="text-gray-400 mt-1">Create and manage your conversational journeys.</p>
+        <div className="h-full w-full overflow-y-auto relative z-10 custom-scrollbar">
+            <div className="p-8 max-w-6xl mx-auto">
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-white">Flow Management</h1>
+                        <p className="text-gray-400 mt-1">Create and manage your conversational journeys.</p>
+                    </div>
+                    <button
+                        onClick={() => setIsCreating(true)}
+                        className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-500 hover:to-teal-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all hover:scale-105"
+                    >
+                        <Plus size={20} /> Create New Flow
+                    </button>
                 </div>
-                <button
-                    onClick={() => setIsCreating(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-500 hover:to-teal-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all hover:scale-105"
-                >
-                    <Plus size={20} /> Create New Flow
-                </button>
-            </div>
 
             {isCreating && (
                 <div className="mb-8 bg-gray-900/80 border border-green-500/30 p-6 rounded-3xl backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-300">
@@ -161,6 +162,7 @@ const FlowManager = ({ onEdit }) => {
                     <p className="text-gray-500">No flows found. Start by creating a new one!</p>
                 </div>
             )}
+            </div>
         </div>
     );
 };

@@ -5,12 +5,12 @@ const BackButton = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Hide back button if we're on the login page or have no history (optional, but let's see)
-    // Actually, user said "each page", so I'll keep it simple but make it look good.
-    
-    // We can hide it on login/register if we want, but "each page" is explicit.
-    // However, clicking back on login might be weird if there's no history.
-    
+    // Hide back button on the root dashboard page and login
+    const hideOnRoutes = ['/dashboard', '/login'];
+    if (hideOnRoutes.includes(location.pathname)) {
+        return null;
+    }
+
     const handleBack = () => {
         navigate(-1);
     };
