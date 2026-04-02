@@ -6,7 +6,7 @@ const BackButton = () => {
     const location = useLocation();
 
     // Hide back button on the root dashboard page and login
-    const hideOnRoutes = ['/dashboard', '/login'];
+    const hideOnRoutes = ['/dashboard', '/login', '/widget'];
     if (hideOnRoutes.includes(location.pathname)) {
         return null;
     }
