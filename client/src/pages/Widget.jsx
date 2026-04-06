@@ -33,6 +33,14 @@ const Widget = () => {
 
     useEffect(() => {
         initGuest();
+
+        const handleSessionExpired = () => {
+            console.log("Guest session expired. Re-initializing...");
+            handleResetGuest();
+        };
+
+        window.addEventListener('widget-session-expired', handleSessionExpired);
+        return () => window.removeEventListener('widget-session-expired', handleSessionExpired);
     }, []);
 
     const handleResetGuest = () => {

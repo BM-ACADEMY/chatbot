@@ -33,7 +33,7 @@ const seedFlow = async () => {
         const stepName = await FlowStep.create({
             flowId,
             stepId: 'start_name',
-            question: "👋 Hi! Welcome to BM Academy 🚀\nWe’re excited to help you grow your career and skills!\n👉 May I know your name?",
+            question: "Welcome!\n👉 May I know your name?",
             captureMapping: 'name',
             isEntryPoint: true,
             position: { x: 0, y: 0 }

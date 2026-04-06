@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, AuthContext } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthProvider';
+import { AuthContext } from './contexts/AuthContext';
 import { useContext } from 'react';
 import Login from './pages/Login';
 import Register from './pages/Register';

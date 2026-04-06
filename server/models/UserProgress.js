@@ -8,6 +8,7 @@ const userProgressSchema = new mongoose.Schema({
     followUpHistory: [{ type: Number }], // Store delayHours of sent follow-ups (e.g. [3, 12, 24])
     lastStepId: { type: String }, // The step the user was most recently asked (for input tracking)
     completed: { type: Boolean, default: false },
+    emailSent: { type: Boolean, default: false }, // Prevent duplicate lead emails
     lastUpdated: { type: Date, default: Date.now }
 }, { timestamps: true });
 

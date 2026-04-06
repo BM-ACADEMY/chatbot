@@ -73,8 +73,8 @@ const sendMessage = async (req, res) => {
         if (!receiverId && (req.user.role === 'user' || req.body.previewFlowId) && !isBotResponse) {
             // Find Active Flow or Preview Flow
             const flowIdToUse = req.body.previewFlowId;
-            const activeFlow = flowIdToUse 
-                ? await Flow.findById(flowIdToUse) 
+            const activeFlow = flowIdToUse
+                ? await Flow.findById(flowIdToUse)
                 : await Flow.findOne({ isActive: true });
 
             if (!activeFlow) {
@@ -82,7 +82,7 @@ const sendMessage = async (req, res) => {
             }
 
             let progress = await UserProgress.findOne({ userId: senderId, flowId: activeFlow._id });
-            
+
             let startStepId = '1';
             const allSteps = await FlowStep.find({ flowId: activeFlow._id });
             if (allSteps.length > 0) {
@@ -99,7 +99,7 @@ const sendMessage = async (req, res) => {
                             });
                         }
                     });
-                    
+
                     const rootNodes = allSteps.filter(step => !targetIds.has(step.stepId));
                     if (rootNodes.length > 0) {
                         const sortedRoots = rootNodes.sort((a, b) => {
@@ -124,83 +124,97 @@ const sendMessage = async (req, res) => {
                     progress.completed = false;
                     progress.followUpHistory = [];
                     progress.lastStepId = null;
+                    progress.emailSent = false; // Reset email trigger
                     await progress.save();
                 } else {
-                    progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: startStepId });
+                    progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: startStepId, emailSent: false });
                 }
 
-                // NEW: Reset user name to Anonymous Lead on journey reset
-                const targetUser = await User.findById(senderId);
-                if (targetUser && (targetUser.phone.startsWith('guest_') || targetUser.name !== 'Anonymous Lead')) {
-                    targetUser.name = 'Anonymous Lead';
-                    await targetUser.save();
-                    userForInjection = targetUser; // ENSURE the reset name is used for the greeting
+                // NEW: Reset user name to Anonymous Lead on journey reset (SKIP for preview)
+                if (!flowIdToUse) {
+                    const targetUser = await User.findById(senderId);
+                    if (targetUser && (targetUser.phone.startsWith('guest_') || targetUser.name !== 'Anonymous Lead')) {
+                        targetUser.name = 'Anonymous Lead';
+                        await targetUser.save();
+                        userForInjection = targetUser; // ENSURE the reset name is used for the greeting
+                    }
                 }
             } else if (!progress) {
                 progress = await UserProgress.create({ userId: senderId, flowId: activeFlow._id, currentStep: startStepId });
             }
 
-        // --- DATA CAPTURE LOGIC ---
-        if (progress.lastStepId) {
-            const prevStep = await FlowStep.findOne({ stepId: progress.lastStepId, flowId: activeFlow._id });
-            if (prevStep && prevStep.captureMapping) {
-                const targetUser = await User.findById(senderId);
-                if (targetUser) {
-                    const mapping = prevStep.captureMapping.toLowerCase();
-                    const value = req.body.fileUrl || text; // Use file if available, else text
+            // Ensure lastStepId is null if we are resetting to avoid capturing the "Resetting journey" text
+            if (req.body.isReset) {
+                progress.lastStepId = null;
+                await progress.save();
+            }
 
-                    if (mapping === 'name') {
-                        targetUser.name = value;
-                    } else if (mapping === 'phone') {
-                        targetUser.phone = value;
-                    } else if (mapping === 'email') {
-                        targetUser.email = value;
-                    } else if (mapping === 'address' || mapping === 'location') {
-                        targetUser.address = value;
-                    } else if (prevStep.captureType === 'file' || mapping === 'document' || mapping === 'file') {
-                        // Store in dedicated documents array
-                        targetUser.documents.push({
-                            name: req.body.fileName || 'Document',
-                            url: value,
-                            type: req.body.fileType || 'unknown'
-                        });
-                    } else {
-                        // Dynamic key storage
-                        if (!targetUser.leadData) targetUser.leadData = new Map();
-                        targetUser.leadData.set(prevStep.captureMapping, value);
-                    }
-                    try {
-                        await targetUser.save();
-                        userForInjection = targetUser; // UPDATE REFERENCE!
-                    } catch (saveErr) {
-                        if (saveErr.code === 11000) {
-                            // E11000 duplicate key error. Save to leadData instead to avoid crashing the flow
-                            if (!targetUser.leadData) targetUser.leadData = new Map();
-                            targetUser.leadData.set(`duplicate_${mapping}`, value);
-                            
-                            // Revert the main fields that caused the crash
-                            const targetUserOld = await User.findById(senderId);
-                            targetUser.phone = targetUserOld.phone;
-                            targetUser.email = targetUserOld.email;
-                            
-                            await targetUser.save();
+            // --- DATA CAPTURE LOGIC ---
+            if (progress.lastStepId) {
+                const prevStep = await FlowStep.findOne({ stepId: progress.lastStepId, flowId: activeFlow._id });
+                if (prevStep && prevStep.captureMapping) {
+                    const targetUser = await User.findById(senderId);
+                    if (targetUser) {
+                        const mapping = prevStep.captureMapping.toLowerCase();
+                        const value = req.body.fileUrl || text; // Use file if available, else text
+
+                        if (mapping === 'name') {
+                            targetUser.name = value;
+                        } else if (mapping === 'phone') {
+                            targetUser.phone = value;
+                        } else if (mapping === 'email') {
+                            targetUser.email = value;
+                        } else if (mapping === 'address' || mapping === 'location') {
+                            targetUser.address = value;
+                        } else if (prevStep.captureType === 'file' || mapping === 'document' || mapping === 'file') {
+                            // Store in dedicated documents array
+                            targetUser.documents.push({
+                                name: req.body.fileName || 'Document',
+                                url: value,
+                                type: req.body.fileType || 'unknown'
+                            });
                         } else {
-                            throw saveErr;
+                            // Dynamic key storage
+                            if (!targetUser.leadData) targetUser.leadData = new Map();
+                            targetUser.leadData.set(prevStep.captureMapping, value);
+                        }
+                        try {
+                            // Skip actually saving the admin's profile if we are in preview simulation mode
+                            if (!flowIdToUse) {
+                                await targetUser.save();
+                            }
+                            userForInjection = targetUser; // UPDATE REFERENCE!
+                        } catch (saveErr) {
+                            if (saveErr.code === 11000) {
+                                // E11000 duplicate key error. Save to leadData instead to avoid crashing the flow
+                                if (!targetUser.leadData) targetUser.leadData = new Map();
+                                targetUser.leadData.set(`duplicate_${mapping}`, value);
+
+                                // Revert the main fields that caused the crash
+                                const targetUserOld = await User.findById(senderId);
+                                targetUser.phone = targetUserOld.phone;
+                                targetUser.email = targetUserOld.email;
+
+                                if (!flowIdToUse) {
+                                    await targetUser.save();
+                                }
+                            } else {
+                                throw saveErr;
+                            }
                         }
                     }
                 }
-            }
 
-            // --- AUTO ADVANCE FOR OPEN RESPONSE NODES ---
-            if (prevStep && (!prevStep.options || prevStep.options.length === 0) && !req.body.isReset && !actionNextStep) {
-                if (prevStep.nextStep) {
-                    actionNextStep = prevStep.nextStep;
-                } else {
-                    actionNextStep = 'end';
+                // --- AUTO ADVANCE FOR OPEN RESPONSE NODES ---
+                if (prevStep && (!prevStep.options || prevStep.options.length === 0) && !req.body.isReset && !actionNextStep) {
+                    if (prevStep.nextStep) {
+                        actionNextStep = prevStep.nextStep;
+                    } else {
+                        actionNextStep = 'end';
+                    }
                 }
             }
-        }
-        // --------------------------
+            // --------------------------
 
             if (actionNextStep) {
                 progress.currentStep = actionNextStep;
@@ -231,6 +245,32 @@ const sendMessage = async (req, res) => {
                     progress.lastStepId = step.stepId;
                     await progress.save();
 
+                    // ── DETECT FINAL STEP & SEND LEAD EMAIL ──────────────────
+                    // Only fire if this is a LIVE flow and NOT already firing from the 'end' block below
+                    if (!flowIdToUse) {
+                        const hasValidOptions = step.options && step.options.some(opt => opt.label && opt.label.trim() !== '');
+                        const isTerminalNode = !step.captureMapping && !hasValidOptions && !step.nextStep;
+
+                        if (isTerminalNode && !progress.emailSent) {
+                            // Mark complete now so frontend shows the restart button immediately
+                            progress.completed = true;
+                            progress.emailSent = true; 
+                            await progress.save();
+
+                            console.log(`[FLOW] Terminal node reached: ${step.stepId}. Sending lead email.`);
+                            const { sendLeadInfoEmail } = require('../utils/email');
+                            const completedUser = await User.findById(senderId);
+                            const adminForEmail = await User.findOne({ role: 'admin' });
+                            const adminEmail = (adminForEmail && adminForEmail.email) || process.env.EMAIL_USER;
+                            if (completedUser && adminEmail) {
+                                sendLeadInfoEmail(adminEmail, completedUser)
+                                    .then(ok => console.log(ok ? '✅ Lead email sent to admin' : '⚠️ Lead email returned false'))
+                                    .catch(err => console.error('❌ Lead email error:', err.message));
+                            }
+                        }
+                    }
+                    // ────────────────────────────────────────────────────────
+
                     // Send push notification for bot response (Skip for previews)
                     if (!flowIdToUse) {
                         const user = await User.findById(senderId);
@@ -259,20 +299,26 @@ const sendMessage = async (req, res) => {
 
                         // Lead Assignment & Push Notifications
                         if (step.assignmentAction) {
-                            const specializedAdmin = await User.findOne({ 
-                                role: { $in: ['admin', 'sub-admin'] }, 
-                                specialty: step.assignmentAction 
+                            const specializedAdmin = await User.findOne({
+                                role: { $in: ['admin', 'sub-admin'] },
+                                specialty: step.assignmentAction
                             });
                             if (specializedAdmin) {
                                 targetUser.assignedTo = specializedAdmin._id;
                                 updated = true;
-                                
+
                                 // Notify the assigned admin! (Only for LIVE flows)
                                 if (!flowIdToUse) {
                                     await sendPushNotification(specializedAdmin, {
                                         title: 'New Lead Assigned!',
                                         body: `${targetUser.name} initiated ${step.assignmentAction} flow.`
                                     });
+
+                                    // Send Email Notification to Assigned Admin
+                                    const { sendLeadInfoEmail } = require('../utils/email');
+                                    if (specializedAdmin.email) {
+                                        sendLeadInfoEmail(specializedAdmin.email, targetUser).catch(err => console.error("Error sending lead email", err));
+                                    }
                                 }
                             }
                         }
@@ -281,10 +327,13 @@ const sendMessage = async (req, res) => {
                     }
                     // -----------------------------------
                 }
-            } else if (progress.completed && actionNextStep === 'end') {
+            } else if (progress.completed && actionNextStep === 'end' && !progress.emailSent) {
                 const admin = await User.findOne({ role: 'admin' });
                 const endText = injectVariables('Thank you {name}! We have received your request and will contact you soon.', req.user);
-                
+
+                progress.emailSent = true;
+                await progress.save();
+
                 botResponse = await Message.create({
                     senderId: admin ? admin._id : senderId,
                     receiverId: senderId,
@@ -305,6 +354,13 @@ const sendMessage = async (req, res) => {
                             title: 'ABM Groups Support',
                             body: endText
                         });
+
+                        // Send Email Notification for Final Completion
+                        const { sendLeadInfoEmail } = require('../utils/email');
+                        const adminEmailToNotify = (admin && admin.email) || process.env.EMAIL_USER;
+                        if (adminEmailToNotify) {
+                            sendLeadInfoEmail(adminEmailToNotify, user).catch(err => console.error("Error sending completion email", err));
+                        }
                     }
                 }
             }

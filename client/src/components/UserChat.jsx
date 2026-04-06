@@ -120,14 +120,14 @@ const getInputConfig = (captureMapping) => {
             return {
                 type: 'tel',
                 placeholder: 'Enter 10-digit mobile number (e.g. 9876543210)',
-                maxLength: 15,
+                maxLength: 10,
                 inputMode: 'tel',
             };
         case 'location':
             return {
                 type: 'text',
-                placeholder: 'Enter your city or area (e.g. Pondicherry)',
-                maxLength: 80,
+                placeholder: 'Address 1, [Address 2,] Country, State, City, Pincode',
+                maxLength: 200,
             };
         case 'email':
             return {
@@ -174,7 +174,14 @@ const generateTimeSlots = (dateStr) => {
         const period = h < 12 ? 'AM' : 'PM';
         const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
         const displayM = m === 0 ? '00' : m;
-        slots.push(`${displayH}:${displayM} ${period}`);
+        
+        // Exclude 1:30 PM to 2:30 PM
+        const isExcluded = (h === 13 && m === 30) || (h === 14 && m === 0) || (h === 14 && m === 30);
+        
+        if (!isExcluded) {
+            slots.push(`${displayH}:${displayM} ${period}`);
+        }
+        
         m += 30;
         if (m >= 60) { m = 0; h++; }
     }
@@ -242,6 +249,8 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
     const [input, setInput] = useState('');
     const [inputError, setInputError] = useState('');
     const [isUploading, setIsUploading] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
     const hasInitialized = useRef(false);
@@ -279,6 +288,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                 fileName: fileMetaData?.name
             };
 
+            setIsTyping(true);
             const { data } = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/messages`, payload, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
@@ -292,38 +302,53 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
             setInput('');
 
             if (data.botResponse) {
-                socket.emit('send_message', data.botResponse);
+                // No need to socket.emit(botResponse) here because the user who triggered it 
+                // already has it in their 'data' and adding it to state will display it.
+                // If we emit it, the same user will receive it back via socket.
                 setMessages((prev) => [...prev, data.botResponse]);
             }
         } catch (error) {
             console.error(error);
+        } finally {
+            setIsTyping(false);
         }
     };
 
     const fetchHistory = async () => {
+        if (hasInitialized.current) return;
+        setIsLoadingHistory(true);
         try {
             const { data } = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/messages/${user._id}`, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            if (data.length === 0 && !hasInitialized.current) {
-                hasInitialized.current = true;
-                await sendMessage(null, true);
-            } else if (data.length > 0) {
+            if (data.length === 0) {
+                if (!hasInitialized.current) {
+                    hasInitialized.current = true;
+                    await sendMessage(null, true);
+                }
+            } else {
                 setMessages(data);
                 hasInitialized.current = true;
             }
         } catch (error) {
             console.error("Error fetching messages", error);
+        } finally {
+            setIsLoadingHistory(false);
         }
     };
 
     useEffect(() => {
         if (user) {
             socket.emit('join_room', user._id);
+            
+            // For Preview mode: Reset flow once
             if (previewFlowId && !hasInitialized.current) {
                 hasInitialized.current = true;
-                sendMessage(null, true);
-            } else if (!previewFlowId) {
+                setIsLoadingHistory(true);
+                sendMessage(null, true).finally(() => setIsLoadingHistory(false));
+            } 
+            // For standard mode: Load history (which triggers reset if empty)
+            else if (!previewFlowId && !hasInitialized.current) {
                 fetchHistory();
             }
         }
@@ -363,15 +388,20 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                 const digits = val.replace(/[\s\-+()]/g, '');
                 if (!/^\d+$/.test(digits))
                     setInputError('Phone number must contain only digits');
-                else if (digits.length < 10)
-                    setInputError('Phone number must be at least 10 digits');
-                else if (digits.length > 13)
-                    setInputError('Phone number is too long');
+                else if (digits.length !== 10)
+                    setInputError('Phone number must be exactly 10 digits');
                 break;
             }
             case 'location': {
-                if (val.trim().length < 2)
-                    setInputError('Please enter a valid location');
+                const parts = val.split(',').map(p => p.trim()).filter(p => p.length > 0);
+                if (parts.length < 5) {
+                    setInputError('Requires minimum 5 details (e.g. Addr 1, Addr 2, Country, State, City, Pincode)');
+                } else {
+                    const pincode = parts[parts.length - 1].replace(/\s/g, '');
+                    if (!/^\d{6}$/.test(pincode)) {
+                        setInputError('Pincode (last detail) must be exactly 6 digits');
+                    }
+                }
                 break;
             }
             case 'email': {
@@ -412,6 +442,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
     };
 
     const handleOptionSelect = async (option) => {
+        setIsTyping(true);
         try {
             const { data } = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/messages`, {
                 receiverId: null,
@@ -429,6 +460,8 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
             }
         } catch (error) {
             console.error(error);
+        } finally {
+            setIsTyping(false);
         }
     };
 
@@ -474,6 +507,8 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
             <main className={`flex-1 overflow-y-auto p-5 space-y-6 ${isEmbedded ? 'bg-gray-900' : 'bg-gray-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-gray-950'}`}>
                 {messages.filter(msg => msg.text !== 'Resetting journey...').map((msg, index) => {
                     const isUser = msg.senderId === user._id && !msg.isBotResponse;
+                    const isLatestBotMsg = msg === lastBotMsg;
+
                     return (
                         <div key={index} className={`flex ${isUser ? 'justify-end' : 'justify-start'} w-full animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                             <div className={`max-w-[85%] rounded-2xl p-4 shadow-xl ${isUser ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-sm' : 'bg-gray-900/80 backdrop-blur-sm text-gray-200 rounded-tl-sm border border-gray-800'}`}>
@@ -509,11 +544,14 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                                         {msg.options.map((opt, idx) => (
                                             <button
                                                 key={idx}
+                                                disabled={isTyping || !isLatestBotMsg}
                                                 onClick={() => handleOptionSelect(opt)}
-                                                className="group text-left px-4 py-3 bg-gray-950/80 border border-gray-700/50 rounded-xl text-xs transition-all text-gray-300 hover:text-white hover:border-blue-500/50 shadow-md flex items-center justify-between active:scale-[0.98]"
+                                                className={`group text-left px-4 py-3 bg-gray-950/80 border border-gray-700/50 rounded-xl text-xs transition-all text-gray-300 shadow-md flex items-center justify-between ${
+                                                    (!isTyping && isLatestBotMsg) ? 'hover:text-white hover:border-blue-500/50 active:scale-[0.98]' : 'opacity-50 cursor-not-allowed'
+                                                }`}
                                             >
                                                 <span className="font-bold">{opt.label}</span>
-                                                <CheckCircle size={14} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0" />
+                                                <CheckCircle size={14} className={`transition-all translate-x-2 ${(!isTyping && isLatestBotMsg) ? 'text-blue-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0' : 'text-gray-600 opacity-100 translate-x-0'}`} />
                                             </button>
                                         ))}
                                     </div>
@@ -523,12 +561,25 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                     );
                 })}
 
-                {messages.length === 0 && (
+                {messages.length === 0 && !isLoadingHistory && !isTyping && (
                     <div className="flex flex-col items-center justify-center h-full text-gray-800/40">
                         <div className="w-16 h-16 bg-gray-900 rounded-3xl border border-gray-800 flex items-center justify-center mb-4">
                             <Bot size={32} className="opacity-20" />
                         </div>
                         <p className="text-[8px] uppercase font-black tracking-[0.4em] ml-1">Cognitive Handshake Required</p>
+                    </div>
+                )}
+                
+                {(isTyping || isLoadingHistory) && (
+                    <div className="flex justify-start w-full animate-in fade-in slide-in-from-bottom-2 duration-300 mb-4">
+                        <div className="max-w-[85%] rounded-lg p-4 shadow-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 border border-gray-800 flex items-center gap-2">
+                            <Bot size={14} className="text-blue-400 animate-pulse" />
+                            <div className="flex gap-1 ml-1" style={{ paddingTop: '2px' }}>
+                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce"></span>
+                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                            </div>
+                        </div>
                     </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -552,6 +603,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                     <TimeSlotPicker
                         messages={messages}
                         onSelectSlot={async (slot) => {
+                            setIsTyping(true);
                             try {
                                 const { data } = await axios.post(
                                     `${import.meta.env.VITE_API_BASE_URL}/api/messages`,
@@ -571,6 +623,8 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                                 }
                             } catch (err) {
                                 console.error(err);
+                            } finally {
+                                setIsTyping(false);
                             }
                         }}
                     />
@@ -633,7 +687,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                             <p className="text-[11px] text-gray-500 font-medium pl-1 flex items-center gap-1.5">
                                 {currentCaptureMapping === 'name'      && <><span>✏️</span> Enter your full name</>}
                                 {currentCaptureMapping === 'phone'     && <><span>📞</span> Enter your 10-digit mobile number</>}
-                                {currentCaptureMapping === 'location'  && <><span>📍</span> Enter your city or area</>}
+                                {currentCaptureMapping === 'location'  && <><span>📍</span> Format: Addr 1, Addr 2 (opt), Country, State, City, Pincode</>}
                                 {currentCaptureMapping === 'email'     && <><span>📧</span> Enter a valid email address</>}
                                 {currentCaptureMapping === 'demo_date' && <><span>📅</span> Select a date — today or later (no Sundays restriction)</>}
                             </p>
