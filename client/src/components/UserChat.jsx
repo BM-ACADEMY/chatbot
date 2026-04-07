@@ -2,7 +2,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { Send, LogOut, Bot, CheckCircle, RefreshCcw, Paperclip, FileText, Phone, MessageCircle, Download, ExternalLink } from 'lucide-react';
+import { Send, LogOut, Bot, CheckCircle, RefreshCcw, FileText, Phone, MessageCircle, Download, ExternalLink } from 'lucide-react';
 
 const socket = io(import.meta.env.VITE_API_BASE_URL);
 
@@ -126,8 +126,8 @@ const getInputConfig = (captureMapping) => {
         case 'location':
             return {
                 type: 'text',
-                placeholder: 'Address 1, [Address 2,] Country, State, City, Pincode',
-                maxLength: 200,
+                placeholder: 'Enter your City / Area (e.g. Malviya Nagar)',
+                maxLength: 100,
             };
         case 'email':
             return {
@@ -248,11 +248,9 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [inputError, setInputError] = useState('');
-    const [isUploading, setIsUploading] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
     const messagesEndRef = useRef(null);
-    const fileInputRef = useRef(null);
     const hasInitialized = useRef(false);
 
     // Get the last bot message to determine what input the bot expects
@@ -393,15 +391,10 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                 break;
             }
             case 'location': {
-                const parts = val.split(',').map(p => p.trim()).filter(p => p.length > 0);
-                if (parts.length < 5) {
-                    setInputError('Requires minimum 5 details (e.g. Addr 1, Addr 2, Country, State, City, Pincode)');
-                } else {
-                    const pincode = parts[parts.length - 1].replace(/\s/g, '');
-                    if (!/^\d{6}$/.test(pincode)) {
-                        setInputError('Pincode (last detail) must be exactly 6 digits');
-                    }
-                }
+                if (val.trim().length < 3)
+                    setInputError('Please enter a valid City / Area');
+                else if (!/^[a-zA-Z\s.-]+$/.test(val))
+                    setInputError('City / Area should only contain letters');
                 break;
             }
             case 'email': {
@@ -421,25 +414,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
         }
     };
 
-    const handleFileUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append('file', file);
-        try {
-            const { data } = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/upload`, formData, {
-                headers: { Authorization: `Bearer ${user.token}`, 'Content-Type': 'multipart/form-data' }
-            });
-            await sendMessage(null, false, data);
-        } catch (error) {
-            console.error("Upload failed", error);
-            alert("File upload failed. Please try again.");
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-    };
+
 
     const handleOptionSelect = async (option) => {
         setIsTyping(true);
@@ -637,8 +612,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                                     type={isWaitingForFile ? 'text' : inputConfig.type}
                                     value={input}
                                     onChange={handleInputChange}
-                                    disabled={isUploading}
-                                    placeholder={isWaitingForFile ? 'Please upload a document...' : inputConfig.placeholder}
+                                    placeholder={inputConfig.placeholder}
                                     pattern={inputConfig.pattern}
                                     inputMode={inputConfig.inputMode}
                                     min={inputConfig.min}
@@ -648,26 +622,12 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                                         ${inputConfig.type === 'date' ? 'cursor-pointer' : ''}
                                     `}
                                 />
-
-                                {/* File upload button */}
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-                                    <button
-                                        type="button"
-                                        disabled={isUploading}
-                                        onClick={() => fileInputRef.current.click()}
-                                        className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${isWaitingForFile ? 'bg-blue-600 text-white animate-pulse shadow-lg shadow-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-gray-800'}`}
-                                        title="Upload Document"
-                                    >
-                                        {isUploading ? <RefreshCcw size={18} className="animate-spin text-blue-400" /> : <Paperclip size={18} />}
-                                    </button>
-                                </div>
                             </div>
 
                             {!isWaitingForFile && (
                                 <button
                                     type="submit"
-                                    disabled={!input.trim() || isUploading || !!inputError}
+                                    disabled={!input.trim() || !!inputError}
                                     className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-30 disabled:scale-100 text-white p-4 rounded-2xl transition-all shadow-xl flex items-center justify-center shadow-blue-500/10 hover:scale-105 active:scale-95 shrink-0"
                                 >
                                     <Send size={18} />
@@ -687,7 +647,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                             <p className="text-[11px] text-gray-500 font-medium pl-1 flex items-center gap-1.5">
                                 {currentCaptureMapping === 'name'      && <><span>✏️</span> Enter your full name</>}
                                 {currentCaptureMapping === 'phone'     && <><span>📞</span> Enter your 10-digit mobile number</>}
-                                {currentCaptureMapping === 'location'  && <><span>📍</span> Format: Addr 1, Addr 2 (opt), Country, State, City, Pincode</>}
+                                {currentCaptureMapping === 'location'  && <><span>📍</span> Enter your City or Area name (letters only)</>}
                                 {currentCaptureMapping === 'email'     && <><span>📧</span> Enter a valid email address</>}
                                 {currentCaptureMapping === 'demo_date' && <><span>📅</span> Select a date — today or later (no Sundays restriction)</>}
                             </p>
