@@ -41,9 +41,10 @@ const sendEmail = async (to, subject, text, html) => {
   }
 };
 
-const sendLeadInfoEmail = async (adminEmail, leadData) => {
+const sendLeadInfoEmail = async (adminEmail, leadData, isPreview = false) => {
   // Generate a professional subject line
-  const subject = `🚀 New Lead Captured: ${leadData.name || "Anonymous Lead"}`;
+  const previewLabel = isPreview ? "[TEST PREVIEW] " : "";
+  const subject = `${previewLabel}🚀 New Lead Captured: ${leadData.name || "Anonymous Lead"}`;
 
   // Build key-value dynamic rows for the template from the leadData map
   let extraFieldsHtml = "";
@@ -78,9 +79,9 @@ const sendLeadInfoEmail = async (adminEmail, leadData) => {
     <div style="max-width: 600px; margin: auto; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
       
       <!-- Header -->
-      <div style="background-color: #4CAF50; padding: 25px; text-align: center;">
-        <h2 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">New Lead Captured</h2>
-        <p style="color: #e8f5e9; margin: 5px 0 0 0; font-size: 14px;">A conversation has been completed or marked as pending review.</p>
+      <div style="background-color: ${isPreview ? '#FF9800' : '#4CAF50'}; padding: 25px; text-align: center;">
+        <h2 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">${isPreview ? 'Test Drive Result' : 'New Lead Captured'}</h2>
+        <p style="color: #e8f5e9; margin: 5px 0 0 0; font-size: 14px;">${isPreview ? 'Triggered from Admin Flow Preview' : 'A conversion has been completed via the Chatbot.'}</p>
       </div>
 
       <!-- Lead Details -->
@@ -108,6 +109,31 @@ const sendLeadInfoEmail = async (adminEmail, leadData) => {
             <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: #555;">Location</td>
             <td style="padding: 10px; border-bottom: 1px solid #eee; color: #333;">${leadData.address || 'N/A'}</td>
           </tr>
+        </table>
+
+        <!-- Enquiries Summary -->
+        ${leadData.enquiries && leadData.enquiries.length > 0 ? `
+          <h3 style="margin-top: 25px; color: #333; font-size: 18px; border-bottom: 2px solid #2196F3; padding-bottom: 10px; display: inline-block;">Service Interests</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; border: 1px solid #eee;">
+            <thead style="background-color: #f5f5f5;">
+              <tr>
+                <th style="padding: 12px; text-align: left; border: 1px solid #eee; color: #555;">Service Name</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #eee; color: #555;">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${leadData.enquiries.map(enq => `
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #eee; color: #333; font-weight: 500;">${enq.service}</td>
+                  <td style="padding: 12px; border: 1px solid #eee; color: #666;">${new Date(enq.timestamp).toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : ''}
+
+        <h3 style="margin-top: 25px; color: #333; font-size: 18px; border-bottom: 2px solid #FF9800; padding-bottom: 10px; display: inline-block;">Additional Context</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 15px;">
           ${extraFieldsHtml}
           ${documentsHtml}
         </table>
@@ -121,20 +147,14 @@ const sendLeadInfoEmail = async (adminEmail, leadData) => {
       <!-- Footer -->
       <div style="background-color: #f9f9f9; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;">
         <p style="font-size: 12px; color: #888; margin: 0;">
-          This is an automated message from your ABM Connect Chatbot. Please do not reply directly to this email. For support, contact <a href="mailto:${process.env.EMAIL_USER}" style="color: #4CAF50;">${process.env.EMAIL_USER}</a>.
+          This is an automated message from your ABM Connect Chatbot. 
         </p>
       </div>
       
     </div>
   `;
 
-  const textContent = `New Lead Captured!
-Name: ${leadData.name || 'N/A'}
-Phone: ${leadData.phone || 'N/A'}
-Email: ${leadData.email || 'N/A'}
-Location: ${leadData.address || 'N/A'}
-
-Please log in to the dashboard to view full details.`;
+  const textContent = `New Lead Captured!\nName: ${leadData.name || 'N/A'}\nPhone: ${leadData.phone || 'N/A'}\nEmail: ${leadData.email || 'N/A'}\nLocation: ${leadData.address || 'N/A'}`;
 
   return await sendEmail(adminEmail, subject, textContent, htmlContent);
 };

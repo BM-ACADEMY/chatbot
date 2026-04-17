@@ -156,56 +156,55 @@ const sendMessage = async (req, res) => {
                     const targetUser = await User.findById(senderId);
                     if (targetUser) {
                         const mapping = prevStep.captureMapping.toLowerCase();
-                        const value = req.body.fileUrl || text; // Use file if available, else text
+                        const value = req.body.fileUrl || text;
+                        let updateOps = {};
 
-                        if (mapping === 'name') {
-                            targetUser.name = value;
-                        } else if (mapping === 'phone') {
-                            targetUser.phone = value;
-                        } else if (mapping === 'email') {
-                            targetUser.email = value;
-                        } else if (mapping === 'address' || mapping === 'location') {
-                            targetUser.address = value;
-                        } else if (prevStep.captureType === 'file' || mapping === 'document' || mapping === 'file') {
-                            // Store in dedicated documents array
-                            targetUser.documents.push({
-                                name: req.body.fileName || 'Document',
-                                url: value,
-                                type: req.body.fileType || 'unknown'
-                            });
-                        } else {
-                            // Dynamic key storage
-                            if (!targetUser.leadData) targetUser.leadData = new Map();
-                            targetUser.leadData.set(prevStep.captureMapping, value);
-                        }
+                        // Identify target fields
+                        if (mapping === 'name') updateOps.name = value;
+                        else if (mapping === 'phone') updateOps.phone = value;
+                        else if (mapping === 'email') updateOps.email = value;
+                        else if (mapping === 'address' || mapping === 'location') updateOps.address = value;
+
                         try {
-                            // Skip actually saving the admin's profile if we are in preview simulation mode
                             if (!flowIdToUse) {
-                                await targetUser.save();
-                            }
-                            userForInjection = targetUser; // UPDATE REFERENCE!
-                        } catch (saveErr) {
-                            if (saveErr.code === 11000) {
-                                // E11000 duplicate key error. Save to leadData instead to avoid crashing the flow
-                                if (!targetUser.leadData) targetUser.leadData = new Map();
-                                targetUser.leadData.set(`duplicate_${mapping}`, value);
-
-                                // Revert the main fields that caused the crash
-                                const targetUserOld = await User.findById(senderId);
-                                targetUser.phone = targetUserOld.phone;
-                                targetUser.email = targetUserOld.email;
-
-                                if (!flowIdToUse) {
-                                    await targetUser.save();
+                                // 1. Set leadData if it's a generic field
+                                if (!['name', 'phone', 'email', 'address', 'location'].includes(mapping) && 
+                                    !mapping.includes('service') && !mapping.includes('enquiry') && !mapping.includes('interest') && 
+                                    prevStep.captureType !== 'file' && mapping !== 'resume') {
+                                    
+                                    const leadKey = `leadData.${prevStep.captureMapping}`;
+                                    updateOps[leadKey] = value;
                                 }
-                            } else {
-                                throw saveErr;
+
+                                // 2. Execute Atomic Update ($set)
+                                if (Object.keys(updateOps).length > 0) {
+                                    await User.updateOne({ _id: senderId }, { $set: updateOps });
+                                }
+
+                                // 3. Execute Atomic Pushes ($push)
+                                if (mapping.includes('service') || mapping.includes('enquiry') || mapping.includes('interest')) {
+                                    await User.updateOne({ _id: senderId }, { 
+                                        $push: { enquiries: { service: text, details: `Step: ${prevStep.stepId}`, timestamp: new Date() } } 
+                                    });
+                                }
+
+                                if (prevStep.captureType === 'file' || mapping === 'resume') {
+                                    await User.updateOne({ _id: senderId }, { 
+                                        $push: { userAttachments: { name: req.body.fileName || 'Attachment', url: value, type: req.body.fileType || 'unknown' } } 
+                                    });
+                                }
                             }
+                            
+                            // Re-fetch for injection if needed
+                            userForInjection = await User.findById(senderId);
+                        } catch (saveErr) {
+                            console.error(`⚠️ Atomic data capture failed: ${saveErr.message}`);
+                            // Continue flow anyway so the bot still replies
                         }
                     }
                 }
 
-                // --- AUTO ADVANCE FOR OPEN RESPONSE NODES ---
+                // --- AUTO ADVANCE FOR OPEN RESPONSE NODES (Text or File) ---
                 if (prevStep && (!prevStep.options || prevStep.options.length === 0) && !req.body.isReset && !actionNextStep) {
                     if (prevStep.nextStep) {
                         actionNextStep = prevStep.nextStep;
@@ -246,27 +245,26 @@ const sendMessage = async (req, res) => {
                     await progress.save();
 
                     // ── DETECT FINAL STEP & SEND LEAD EMAIL ──────────────────
-                    // Only fire if this is a LIVE flow and NOT already firing from the 'end' block below
-                    if (!flowIdToUse) {
-                        const hasValidOptions = step.options && step.options.some(opt => opt.label && opt.label.trim() !== '');
-                        const isTerminalNode = !step.captureMapping && !hasValidOptions && !step.nextStep;
+                    // Trigger email on specific steps or any true terminal nodes
+                    const isFinalSubmitStep = step.stepId.includes('final') || step.stepId.includes('thank_you') || step.stepId.includes('team_call');
+                    const hasValidOptions = step.options && step.options.some(opt => opt.label && opt.label.trim() !== '');
+                    const isTerminalNode = !step.captureMapping && !hasValidOptions && !step.nextStep;
 
-                        if (isTerminalNode && !progress.emailSent) {
-                            // Mark complete now so frontend shows the restart button immediately
-                            progress.completed = true;
-                            progress.emailSent = true; 
-                            await progress.save();
+                    if ((isFinalSubmitStep || isTerminalNode) && !progress.emailSent) {
+                        progress.emailSent = true;
+                        await progress.save();
 
-                            console.log(`[FLOW] Terminal node reached: ${step.stepId}. Sending lead email.`);
-                            const { sendLeadInfoEmail } = require('../utils/email');
-                            const completedUser = await User.findById(senderId);
-                            const adminForEmail = await User.findOne({ role: 'admin' });
-                            const adminEmail = (adminForEmail && adminForEmail.email) || process.env.EMAIL_USER;
-                            if (completedUser && adminEmail) {
-                                sendLeadInfoEmail(adminEmail, completedUser)
-                                    .then(ok => console.log(ok ? '✅ Lead email sent to admin' : '⚠️ Lead email returned false'))
-                                    .catch(err => console.error('❌ Lead email error:', err.message));
-                            }
+                        console.log(`[FLOW] Finalizing enquiry: ${step.stepId}. Sending consolidated email.`);
+                        const { sendLeadInfoEmail } = require('../utils/email');
+                        const completedUser = await User.findById(senderId);
+                        const adminForEmail = await User.findOne({ role: 'admin' });
+                        const adminEmail = (adminForEmail && adminForEmail.email) || process.env.EMAIL_USER;
+                        
+                        if (completedUser && adminEmail) {
+                            // Pass flowIdToUse to indicate this is a preview enquiry
+                            sendLeadInfoEmail(adminEmail, completedUser, !!flowIdToUse)
+                                .then(ok => console.log(ok ? '✅ Consolidated enquiry email sent' : '⚠️ Email send returned false'))
+                                .catch(err => console.error('❌ Email error:', err.message));
                         }
                     }
                     // ────────────────────────────────────────────────────────
@@ -329,7 +327,7 @@ const sendMessage = async (req, res) => {
                 }
             } else if (progress.completed && actionNextStep === 'end' && !progress.emailSent) {
                 const admin = await User.findOne({ role: 'admin' });
-                const endText = injectVariables('Thank you {name}! We have received your request and will contact you soon.', req.user);
+                const endText = injectVariables('Thank you {name}! We have received your request and will contact you soon.', userForInjection);
 
                 progress.emailSent = true;
                 await progress.save();

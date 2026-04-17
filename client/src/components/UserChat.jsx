@@ -2,7 +2,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { Send, LogOut, Bot, CheckCircle, RefreshCcw, FileText, Phone, MessageCircle, Download, ExternalLink } from 'lucide-react';
+import { Send, LogOut, Bot, CheckCircle, RefreshCcw, FileText, Phone, MessageCircle, Download, ExternalLink, Upload, X, Paperclip, File } from 'lucide-react';
 
 const socket = io(import.meta.env.VITE_API_BASE_URL);
 
@@ -13,92 +13,85 @@ const socket = io(import.meta.env.VITE_API_BASE_URL);
 const renderTextWithLinks = (text) => {
     if (!text) return null;
     const parts = [];
-    // Regex matches [label](url) markdown link syntax
-    // Matches [label](any-url) — supports tel:, https://, wa.me, mailto: etc.
-    const linkRegex = /\[([^\]]+)\]\(([^\)]+)\)/g;
-    let lastIndex = 0;
-    let match;
+    
+    // 1. Regex for Markdown Links: [label](url)
+    const mdLinkRegex = /\[([^\]]+)\]\(([^\)]+)\)/;
+    // 2. Regex for Raw URLs: http(s)://... (Improved to avoid trailing punctuation)
+    const rawUrlRegex = /(https?:\/\/[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*))/;
 
-    while ((match = linkRegex.exec(text)) !== null) {
-        // Push plain text before this match
-        if (match.index > lastIndex) {
-            const segment = text.slice(lastIndex, match.index);
-            parts.push(
-                <span key={lastIndex} className="whitespace-pre-wrap">{segment}</span>
-            );
+    // Combined iterative parser
+    let remaining = text;
+    let key = 0;
+
+    while (remaining) {
+        const mdMatch = remaining.match(mdLinkRegex);
+        const rawMatch = remaining.match(rawUrlRegex);
+
+        let match = null;
+        let type = '';
+
+        // Choose the match that appears earliest
+        if (mdMatch && (!rawMatch || mdMatch.index <= rawMatch.index)) {
+            match = mdMatch;
+            type = 'markdown';
+        } else if (rawMatch) {
+            match = rawMatch;
+            type = 'raw';
         }
 
-        const label = match[1];
-        const url = match[2];
-        const isWhatsApp = url.includes('wa.me');
-        const isPhone = url.startsWith('tel:');
-        const isPdf = url.endsWith('.pdf');
-
-        if (isPhone) {
-            parts.push(
-                <a
-                    key={match.index}
-                    href={url}
-                    className="inline-flex items-center gap-1.5 my-1 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold transition-all"
-                >
-                    <Phone size={12} /> {label}
-                </a>
-            );
-        } else if (isWhatsApp) {
-            // Automatically add [Chatbot] prefix to the WhatsApp message
-            const prefix = encodeURIComponent("[Chatbot] ");
-            let updatedUrl = url;
-            if (url.includes('text=')) {
-                updatedUrl = url.replace('text=', `text=${prefix}`);
-            } else {
-                updatedUrl = `${url}${url.includes('?') ? '&' : '?'}text=${prefix}`;
+        if (match) {
+            // Push text before the match
+            if (match.index > 0) {
+                parts.push(<span key={key++} className="whitespace-pre-wrap">{remaining.slice(0, match.index)}</span>);
             }
 
-            parts.push(
-                <a
-                    key={match.index}
-                    href={updatedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 my-1 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/40 border border-green-500/40 text-green-300 rounded-xl text-xs font-bold transition-all"
-                >
-                    <MessageCircle size={12} /> {label}
-                </a>
-            );
-        } else if (isPdf) {
-            parts.push(
-                <a
-                    key={match.index}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 my-1 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/40 text-blue-300 rounded-xl text-xs font-bold transition-all"
-                >
-                    <Download size={12} /> {label}
-                </a>
-            );
+            const label = type === 'markdown' ? match[1] : match[1];
+            const url = type === 'markdown' ? match[2] : match[1];
+
+            const isWhatsApp = url.includes('wa.me');
+            const isPhone = url.startsWith('tel:');
+            const isPdf = url.toLowerCase().endsWith('.pdf');
+
+            // Shared styling for link buttons
+            const btnClass = "inline-flex items-center gap-1.5 my-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-sm ";
+            
+            if (isPhone) {
+                parts.push(
+                    <a key={key++} href={url} className={btnClass + "bg-emerald-600/20 hover:bg-emerald-600/40 border-emerald-500/40 text-emerald-300"}>
+                        <Phone size={12} /> {label}
+                    </a>
+                );
+            } else if (isWhatsApp) {
+                const prefix = encodeURIComponent("[Chatbot] ");
+                let updatedUrl = url;
+                if (url.includes('text=')) updatedUrl = url.replace('text=', `text=${prefix}`);
+                else updatedUrl = `${url}${url.includes('?') ? '&' : '?'}text=${prefix}`;
+
+                parts.push(
+                    <a key={key++} href={updatedUrl} target="_blank" rel="noopener noreferrer" className={btnClass + "bg-green-600/20 hover:bg-green-600/40 border-green-500/40 text-green-300"}>
+                        <MessageCircle size={12} /> {label}
+                    </a>
+                );
+            } else if (isPdf) {
+                parts.push(
+                    <a key={key++} href={url} target="_blank" rel="noopener noreferrer" className={btnClass + "bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/40 text-blue-300"}>
+                        <Download size={12} /> {label}
+                    </a>
+                );
+            } else {
+                parts.push(
+                    <a key={key++} href={url} target="_blank" rel="noopener noreferrer" className={btnClass + "bg-purple-600/20 hover:bg-purple-600/40 border-purple-500/40 text-purple-300"}>
+                        <ExternalLink size={12} /> {label.length > 30 ? label.slice(0, 27) + "..." : label}
+                    </a>
+                );
+            }
+
+            remaining = remaining.slice(match.index + match[0].length);
         } else {
-            parts.push(
-                <a
-                    key={match.index}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 my-1 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/40 text-purple-300 rounded-xl text-xs font-bold transition-all"
-                >
-                    <ExternalLink size={12} /> {label}
-                </a>
-            );
+            // No more matches
+            parts.push(<span key={key++} className="whitespace-pre-wrap">{remaining}</span>);
+            remaining = '';
         }
-
-        lastIndex = match.index + match[0].length;
-    }
-
-    // Remaining text after last match
-    if (lastIndex < text.length) {
-        parts.push(
-            <span key={lastIndex} className="whitespace-pre-wrap">{text.slice(lastIndex)}</span>
-        );
     }
 
     return <>{parts}</>;
@@ -140,6 +133,43 @@ const getInputConfig = (captureMapping) => {
                 placeholder: '',
                 min: new Date().toISOString().split('T')[0],
             };
+        case 'property_budget':
+            return {
+                type: 'text',
+                placeholder: 'e.g. 20L - 50L',
+                maxLength: 50,
+            };
+        case 'property_pref_location':
+        case 'property_sell_location':
+            return {
+                type: 'text',
+                placeholder: 'Enter area (e.g. ECR, Villianur)',
+                maxLength: 100,
+            };
+        case 'property_type':
+            return {
+                type: 'text',
+                placeholder: 'e.g. DTCP Plot, 2BHK Villa',
+                maxLength: 100,
+            };
+        case 'property_price':
+            return {
+                type: 'text',
+                placeholder: 'e.g. 45 Lakhs',
+                maxLength: 50,
+            };
+        case 'job_qual_exp':
+            return {
+                type: 'text',
+                placeholder: 'e.g. MBA, 2 Years Experience in Sales',
+                maxLength: 150,
+            };
+        case 'job_pref_location':
+            return {
+                type: 'text',
+                placeholder: 'e.g. Chennai, Pondicherry',
+                maxLength: 100,
+            };
         default:
             return {
                 type: 'text',
@@ -174,14 +204,14 @@ const generateTimeSlots = (dateStr) => {
         const period = h < 12 ? 'AM' : 'PM';
         const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
         const displayM = m === 0 ? '00' : m;
-        
+
         // Exclude 1:30 PM to 2:30 PM
         const isExcluded = (h === 13 && m === 30) || (h === 14 && m === 0) || (h === 14 && m === 30);
-        
+
         if (!isExcluded) {
             slots.push(`${displayH}:${displayM} ${period}`);
         }
-        
+
         m += 30;
         if (m >= 60) { m = 0; h++; }
     }
@@ -245,13 +275,44 @@ const TimeSlotPicker = ({ messages, onSelectSlot }) => {
 // ──────────────────────────────────────────────────
 const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
     const { user, logout } = useContext(AuthContext);
+    
+    // Helper to get specialized icons/colors for file types
+    const getFileDisplay = (fileName, fileType) => {
+        const name = fileName?.toLowerCase() || '';
+        const type = fileType?.toLowerCase() || '';
+        
+        if (name.endsWith('.pdf') || type.includes('pdf')) {
+            return {
+                icon: <FileText size={20} className="text-red-400" />,
+                bg: 'bg-red-500/20',
+                label: 'PDF Document'
+            };
+        }
+        if (name.endsWith('.doc') || name.endsWith('.docx') || type.includes('word') || type.includes('officedocument')) {
+            return {
+                icon: <FileText size={20} className="text-blue-400" />,
+                bg: 'bg-blue-500/20',
+                label: 'Word Document'
+            };
+        }
+        return {
+            icon: <File size={20} className="text-gray-400" />,
+            bg: 'bg-gray-500/20',
+            label: 'Attachment'
+        };
+    };
+
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [inputError, setInputError] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [globalError, setGlobalError] = useState(null);
     const messagesEndRef = useRef(null);
     const hasInitialized = useRef(false);
+    const fileInputRef = useRef(null);
 
     // Get the last bot message to determine what input the bot expects
     const lastBotMsg = [...messages].reverse().find(m => m.isBotResponse);
@@ -260,30 +321,69 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
     const inputConfig = getInputConfig(currentCaptureMapping);
     const isFlowComplete = lastBotMsg && !currentCaptureMapping && (!lastBotMsg.options || lastBotMsg.options.length === 0) && !isWaitingForFile;
 
+    // Full reset: create a brand-new guest session
     const handleRestartChat = () => {
         if (isEmbedded) {
             logout(); // for guests, this creates a fully new lead profile
         } else {
-            hasInitialized.current = false; // Allow re-init for manual reset if needed, though sendMessage(null, true) handles it
+            hasInitialized.current = false;
             sendMessage(null, true);
         }
     };
 
+    const handleFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 10 * 1024 * 1024) {
+                setInputError('File size must be less than 10MB');
+                return;
+            }
+            setSelectedFile(file);
+            setInputError('');
+        }
+    };
+
+    const removeSelectedFile = () => {
+        setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
     const sendMessage = async (e, isReset = false, fileMetaData = null) => {
         if (e) e.preventDefault();
-        if (!input.trim() && !isReset && !fileMetaData) return;
+        if (!input.trim() && !isReset && !fileMetaData && !selectedFile) return;
         if (inputError) return; // Block submission if validation fails
+        setGlobalError(null);
 
         try {
+            let fileData = fileMetaData;
+
+            // Handle manual file upload if a file is selected
+            if (selectedFile && !isReset) {
+                setIsUploading(true);
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+
+                const uploadRes = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/upload`, formData, {
+                    headers: { 
+                        'Content-Type': 'multipart/form-data',
+                        Authorization: `Bearer ${user.token}` 
+                    }
+                });
+                fileData = uploadRes.data;
+                setIsUploading(false);
+                setSelectedFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            }
+
             const payload = {
                 receiverId: null,
-                text: isReset ? 'Resetting journey...' : (fileMetaData ? `Uploaded: ${fileMetaData.name}` : input),
+                text: isReset ? 'Resetting journey...' : (fileData ? `Uploaded: ${fileData.name}` : input),
                 actionNextStep: null,
                 previewFlowId,
                 isReset,
-                fileUrl: fileMetaData?.url,
-                fileType: fileMetaData?.type,
-                fileName: fileMetaData?.name
+                fileUrl: fileData?.url,
+                fileType: fileData?.type,
+                fileName: fileData?.name
             };
 
             setIsTyping(true);
@@ -307,8 +407,10 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
             }
         } catch (error) {
             console.error(error);
+            setGlobalError(error.response?.data?.message || 'Something went wrong. Please try again.');
         } finally {
             setIsTyping(false);
+            setIsUploading(false);
         }
     };
 
@@ -338,13 +440,13 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
     useEffect(() => {
         if (user) {
             socket.emit('join_room', user._id);
-            
+
             // For Preview mode: Reset flow once
             if (previewFlowId && !hasInitialized.current) {
                 hasInitialized.current = true;
                 setIsLoadingHistory(true);
                 sendMessage(null, true).finally(() => setIsLoadingHistory(false));
-            } 
+            }
             // For standard mode: Load history (which triggers reset if empty)
             else if (!previewFlowId && !hasInitialized.current) {
                 fetchHistory();
@@ -368,18 +470,25 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
 
     // ── Live Validation ──────────────────────────
     const handleInputChange = (e) => {
-        const val = e.target.value;
-        setInput(val);
+        let val = e.target.value;
         setInputError('');
 
-        if (!val) return; // Don't validate empty while typing
+        // ── Aggressive "Letters Only" filtering ──────────────────
+        const letterOnlyMappings = ['name', 'location', 'property_pref_location', 'property_sell_location', 'property_type', 'job_qual_exp', 'job_pref_location'];
+        if (letterOnlyMappings.includes(currentCaptureMapping)) {
+            // Strip anything that is NOT a letter, space, period, or comma
+            val = val.replace(/[^a-zA-Z\s.,'-]/g, '');
+        }
+        // ────────────────────────────────────────────────────────
+
+        setInput(val);
+
+        if (!val) return;
 
         switch (currentCaptureMapping) {
             case 'name': {
                 if (val.trim().length < 2)
                     setInputError('Name must be at least 2 characters');
-                else if (!/^[a-zA-Z\s.'-]+$/.test(val))
-                    setInputError('Name should only contain letters');
                 break;
             }
             case 'phone': {
@@ -390,16 +499,16 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                     setInputError('Phone number must be exactly 10 digits');
                 break;
             }
-            case 'location': {
+            case 'location': 
+            case 'property_pref_location':
+            case 'property_sell_location': {
                 if (val.trim().length < 3)
                     setInputError('Please enter a valid City / Area');
-                else if (!/^[a-zA-Z\s.-]+$/.test(val))
-                    setInputError('City / Area should only contain letters');
                 break;
             }
             case 'email': {
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val))
-                    setInputError('Enter a valid email address (e.g. you@gmail.com)');
+                    setInputError('Enter a valid email address');
                 break;
             }
             case 'demo_date': {
@@ -413,8 +522,6 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                     setInputError('This field cannot be empty');
         }
     };
-
-
 
     const handleOptionSelect = async (option) => {
         setIsTyping(true);
@@ -446,9 +553,6 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
             {!isEmbedded ? (
                 <header className="flex items-center justify-between p-5 bg-gray-900 border-b border-gray-800 shadow-md z-10 shrink-0">
                     <div className="flex items-center gap-4">
-                        {/* <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-xl border border-white/5">
-                            <Bot className="text-white" size={28} />
-                        </div> */}
                         <div>
                             <h1 className="text-lg font-black tracking-tight text-white">ABM Connect</h1>
                             <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
@@ -482,7 +586,6 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
             <main className={`flex-1 overflow-y-auto p-5 space-y-6 ${isEmbedded ? 'bg-gray-900' : 'bg-gray-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-gray-950'}`}>
                 {messages.filter(msg => msg.text !== 'Resetting journey...').map((msg, index) => {
                     const isUser = msg.senderId === user._id && !msg.isBotResponse;
-                    const isLatestBotMsg = msg === lastBotMsg;
 
                     return (
                         <div key={index} className={`flex ${isUser ? 'justify-end' : 'justify-start'} w-full animate-in fade-in slide-in-from-bottom-2 duration-300`}>
@@ -494,19 +597,22 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                                     </div>
                                 )}
 
-                                {msg.fileUrl ? (
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex items-center gap-3 p-3 bg-black/30 rounded-xl border border-white/10 group cursor-pointer hover:bg-black/50 transition-all">
-                                            <div className="p-2 bg-blue-500/20 rounded-lg">
-                                                <FileText size={20} className="text-blue-400" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-bold truncate">{msg.text.replace('Uploaded: ', '')}</p>
-                                                <p className="text-[9px] opacity-60 uppercase font-bold">{msg.fileType?.split('/')[1] || 'Document'}</p>
+                                {msg.fileUrl ? (() => {
+                                    const fileInfo = getFileDisplay(msg.fileName || msg.text, msg.fileType);
+                                    return (
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex items-center gap-3 p-3 bg-black/30 rounded-xl border border-white/10 group cursor-pointer hover:bg-black/50 transition-all">
+                                                <div className={`p-2 ${fileInfo.bg} rounded-lg`}>
+                                                    {fileInfo.icon}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold truncate">{msg.text.replace('Uploaded: ', '')}</p>
+                                                    <p className="text-[9px] opacity-60 uppercase font-bold tracking-wider">{fileInfo.label}</p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ) : (
+                                    );
+                                })() : (
                                     /* Render text with link parsing */
                                     <div className="text-sm font-medium leading-relaxed">
                                         {renderTextWithLinks(msg.text)}
@@ -519,14 +625,13 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                                         {msg.options.map((opt, idx) => (
                                             <button
                                                 key={idx}
-                                                disabled={isTyping || !isLatestBotMsg}
+                                                disabled={isTyping}
                                                 onClick={() => handleOptionSelect(opt)}
-                                                className={`group text-left px-4 py-3 bg-gray-950/80 border border-gray-700/50 rounded-xl text-xs transition-all text-gray-300 shadow-md flex items-center justify-between ${
-                                                    (!isTyping && isLatestBotMsg) ? 'hover:text-white hover:border-blue-500/50 active:scale-[0.98]' : 'opacity-50 cursor-not-allowed'
-                                                }`}
+                                                className={`group text-left px-4 py-3 bg-gray-950/80 border border-gray-700/50 rounded-xl text-xs transition-all text-gray-300 shadow-md flex items-center justify-between ${!isTyping ? 'hover:text-white hover:border-blue-500/50 active:scale-[0.98]' : 'opacity-50 cursor-not-allowed'
+                                                    }`}
                                             >
                                                 <span className="font-bold">{opt.label}</span>
-                                                <CheckCircle size={14} className={`transition-all translate-x-2 ${(!isTyping && isLatestBotMsg) ? 'text-blue-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0' : 'text-gray-600 opacity-100 translate-x-0'}`} />
+                                                <CheckCircle size={14} className={`transition-all translate-x-2 ${!isTyping ? 'text-blue-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0' : 'text-gray-600 opacity-100 translate-x-0'}`} />
                                             </button>
                                         ))}
                                     </div>
@@ -544,7 +649,7 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                         <p className="text-[8px] uppercase font-black tracking-[0.4em] ml-1">Cognitive Handshake Required</p>
                     </div>
                 )}
-                
+
                 {(isTyping || isLoadingHistory) && (
                     <div className="flex justify-start w-full animate-in fade-in slide-in-from-bottom-2 duration-300 mb-4">
                         <div className="max-w-[85%] rounded-lg p-4 shadow-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 border border-gray-800 flex items-center gap-2">
@@ -562,16 +667,31 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
 
             {/* Footer Input Area */}
             <footer className="bg-gray-950 border-t border-gray-800 shrink-0">
+                {globalError && (
+                    <div className="px-5 py-2 bg-red-500/10 border-b border-red-500/20 flex items-center justify-between animate-in slide-in-from-top-1">
+                        <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">⚠️ {globalError}</p>
+                        <button onClick={() => setGlobalError(null)} className="text-gray-500 hover:text-white transition-colors">
+                            <X size={12} />
+                        </button>
+                    </div>
+                )}
 
-                {/* ── FLOW COMPLETE STATE (RESTART BUTTON) ── */}
+                {/* ── FLOW COMPLETE STATE (FINAL THANK YOU) ── */}
                 {isFlowComplete ? (
-                    <div className="p-6 flex flex-col items-center justify-center gap-3">
-                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest text-center">Chat Session Completed</p>
-                        <button 
+                    <div className="p-8 flex flex-col items-center justify-center gap-4 text-center animate-in fade-in zoom-in duration-500">
+                        <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/30">
+                            <CheckCircle size={32} className="text-emerald-500" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-white font-bold">Enquiry Successfully Submitted</p>
+                            <p className="text-[10px] text-gray-500 mt-1 max-w-[200px]">Our team has been notified and will contact you shortly.</p>
+                        </div>
+                        <button
                             onClick={handleRestartChat}
-                            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-sm font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                            disabled={isTyping}
+                            className="mt-2 px-6 py-2 bg-gray-900 hover:bg-gray-800 text-[10px] text-gray-400 hover:text-white font-bold uppercase tracking-wider transition-all border border-gray-800 rounded-xl"
                         >
-                            <RefreshCcw size={16} /> Start New Enquiry
+                            Start Fresh Session
                         </button>
                     </div>
                 ) : currentCaptureMapping === 'demo_time' ? (
@@ -604,52 +724,112 @@ const UserChat = ({ isEmbedded = false, previewFlowId = null }) => {
                         }}
                     />
                 ) : (
-                    <form onSubmit={sendMessage} className="flex flex-col gap-2 p-5">
-                        <div className="flex gap-3 items-center">
+                    <form onSubmit={sendMessage} className="flex flex-col gap-3 p-5">
+                        {/* File Selection Preview */}
+                        {selectedFile && (
+                            <div className="flex items-center justify-between p-3 bg-blue-600/10 border border-blue-500/20 rounded-xl animate-in slide-in-from-bottom-2">
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                    <div className="p-1.5 bg-blue-500/20 rounded-lg">
+                                        <FileText size={14} className="text-blue-400 shrink-0" />
+                                    </div>
+                                    <div className="flex flex-col overflow-hidden">
+                                        <span className="text-[11px] font-bold text-gray-200 truncate">{selectedFile.name}</span>
+                                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB • Ready to Upload</span>
+                                    </div>
+                                </div>
+                                <button type="button" onClick={removeSelectedFile} className="p-2 text-gray-500 hover:text-red-400 transition-colors bg-gray-900 rounded-lg border border-gray-800 hover:border-red-500/30">
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Validation Error */}
+                        {inputError && (
+                            <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl animate-in fade-in">
+                                <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">{inputError}</p>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2.5 items-center">
                             <div className="relative flex-1 group">
-                                <input
-                                    id="chat-input"
-                                    type={isWaitingForFile ? 'text' : inputConfig.type}
-                                    value={input}
-                                    onChange={handleInputChange}
-                                    placeholder={inputConfig.placeholder}
-                                    pattern={inputConfig.pattern}
-                                    inputMode={inputConfig.inputMode}
-                                    min={inputConfig.min}
-                                    maxLength={inputConfig.maxLength}
-                                    className={`w-full bg-gray-900 border rounded-2xl px-5 py-3.5 text-xs text-white focus:outline-none focus:ring-2 transition-all placeholder-gray-600 shadow-inner disabled:opacity-50
-                                        ${inputError ? 'border-red-500/60 focus:ring-red-500/30' : 'border-gray-800 focus:ring-blue-500/40'}
-                                        ${inputConfig.type === 'date' ? 'cursor-pointer' : ''}
-                                    `}
-                                />
+                                {isWaitingForFile ? (
+                                    <div className="flex flex-col">
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            onChange={handleFileSelect}
+                                            className="hidden"
+                                            accept=".pdf,.doc,.docx"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={isUploading || isTyping}
+                                            className="w-full flex items-center justify-center gap-3 py-3.5 bg-gray-950 border-2 border-dashed border-gray-800 hover:border-blue-500/50 hover:bg-blue-500/5 rounded-2xl transition-all group disabled:opacity-50"
+                                        >
+                                            <div className="p-2 bg-blue-500/10 rounded-xl group-hover:scale-110 transition-transform">
+                                                <Upload size={18} className="text-blue-500" />
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="text-[11px] font-black text-white uppercase tracking-wider">Choose Resume</p>
+                                                <p className="text-[9px] text-gray-600 font-bold uppercase tracking-tighter">PDF, DOC, DOCX • MAX 10MB</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="relative">
+                                        <input
+                                            id="chat-input"
+                                            type={inputConfig.type}
+                                            value={input}
+                                            onChange={handleInputChange}
+                                            placeholder={inputConfig.placeholder}
+                                            pattern={inputConfig.pattern}
+                                            inputMode={inputConfig.inputMode}
+                                            min={inputConfig.min}
+                                            maxLength={inputConfig.maxLength}
+                                            disabled={isUploading || isTyping}
+                                            className={`w-full bg-gray-900 border rounded-2xl px-5 py-4 text-xs text-white focus:outline-none focus:ring-2 transition-all placeholder-gray-600 shadow-inner disabled:opacity-50
+                                                ${inputError ? 'border-red-500/60 focus:ring-red-500/30' : 'border-gray-800 focus:ring-blue-500/40'}
+                                                ${inputConfig.type === 'date' ? 'cursor-pointer' : ''}
+                                            `}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    sendMessage(e);
+                                                }
+                                            }}
+                                        />
+                                        <div className="absolute top-1/2 -translate-y-1/2 left-0.5 w-[2px] h-0 bg-blue-500 group-focus-within:h-6 transition-all duration-300 rounded-full" />
+                                    </div>
+                                )}
                             </div>
 
-                            {!isWaitingForFile && (
-                                <button
-                                    type="submit"
-                                    disabled={!input.trim() || !!inputError}
-                                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-30 disabled:scale-100 text-white p-4 rounded-2xl transition-all shadow-xl flex items-center justify-center shadow-blue-500/10 hover:scale-105 active:scale-95 shrink-0"
-                                >
-                                    <Send size={18} />
-                                </button>
-                            )}
+                            <button
+                                type="submit"
+                                disabled={isTyping || isUploading || (!input.trim() && !selectedFile)}
+                                className={`h-[52px] w-[52px] flex items-center justify-center rounded-2xl shadow-lg transition-all active:scale-90 shrink-0 ${
+                                    isTyping || isUploading || (!input.trim() && !selectedFile)
+                                        ? 'bg-gray-800 text-gray-600 cursor-not-allowed border border-gray-700/50'
+                                        : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white hover:shadow-blue-500/25 hover:-translate-y-0.5 border border-white/10'
+                                }`}
+                            >
+                                {isUploading ? (
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <Send size={20} className={!input.trim() && !selectedFile ? 'opacity-40' : 'opacity-100'} />
+                                )}
+                            </button>
                         </div>
-
-                        {/* Live Validation Error */}
-                        {inputError && (
-                            <p className="text-xs text-red-400 font-semibold pl-2 animate-in fade-in duration-200">
-                                ⚠ {inputError}
-                            </p>
-                        )}
 
                         {/* Input type hint */}
                         {currentCaptureMapping && !isWaitingForFile && (
-                            <p className="text-[11px] text-gray-500 font-medium pl-1 flex items-center gap-1.5">
-                                {currentCaptureMapping === 'name'      && <><span>✏️</span> Enter your full name</>}
-                                {currentCaptureMapping === 'phone'     && <><span>📞</span> Enter your 10-digit mobile number</>}
-                                {currentCaptureMapping === 'location'  && <><span>📍</span> Enter your City or Area name (letters only)</>}
-                                {currentCaptureMapping === 'email'     && <><span>📧</span> Enter a valid email address</>}
-                                {currentCaptureMapping === 'demo_date' && <><span>📅</span> Select a date — today or later (no Sundays restriction)</>}
+                            <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest pl-1 mt-1">
+                                {currentCaptureMapping === 'name' && "✏️ Enter Full Name"}
+                                {currentCaptureMapping === 'phone' && "📞 10-Digit Mobile"}
+                                {currentCaptureMapping === 'location' && "📍 Area / City (Letters)"}
+                                {currentCaptureMapping === 'email' && "📧 Valid Email"}
+                                {currentCaptureMapping === 'demo_date' && "📅 Pick a Date"}
                             </p>
                         )}
                     </form>

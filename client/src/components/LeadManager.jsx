@@ -4,8 +4,24 @@ import { AuthContext } from '../contexts/AuthContext';
 import {
     Search, Filter, Users, Database, MessageCircle, UserCheck,
     Tag, ChevronDown, ChevronUp, RefreshCw, CalendarClock, Phone, MapPin, Mail,
-    Download, Trash2, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, X
+    Download, Trash2, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, X,
+    Info, FileText, Building, Briefcase, Clock, ArrowUpRight, ExternalLink
 } from 'lucide-react';
+
+const DEEP_BLUE_GRADIENT = "from-blue-600/20 to-indigo-600/20";
+const BORDER_STYLE = "border-blue-500/20";
+
+const DetailRow = ({ icon: Icon, label, value, color = "text-blue-400" }) => (
+    <div className="flex items-start gap-4 p-4 bg-gray-900/50 rounded-2xl border border-gray-800/50 shadow-sm transition-all hover:bg-gray-800/50 group">
+        <div className={`p-2.5 rounded-xl bg-gray-950 border border-gray-800 ${color} group-hover:scale-110 transition-transform`}>
+            <Icon size={18} />
+        </div>
+        <div>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">{label}</p>
+            <p className="text-sm text-gray-200 font-bold">{value || <span className="text-gray-600 italic font-medium">Not Provided</span>}</p>
+        </div>
+    </div>
+);
 
 const MISSING = ({ label }) => (
     <span className="italic text-gray-600 text-xs">— {label || 'Not provided'}</span>
@@ -24,6 +40,7 @@ const LeadManager = ({ onViewChat }) => {
     
     // UI States
     const [deletingLead, setDeletingLead] = useState(null);
+    const [selectedLead, setSelectedLead] = useState(null); // Full Intelligence Panel
     const [isDeleting, setIsDeleting] = useState(false);
     const [toast, setToast] = useState(null);
 
@@ -126,7 +143,7 @@ const LeadManager = ({ onViewChat }) => {
         if (filteredLeads.length === 0) return;
         
         // Define CSV headers
-        const headers = ['Name', 'Phone', 'Email', 'Location', 'Tags', 'Demo Date', 'Demo Time'];
+        const headers = ['Name', 'Phone', 'Email', 'Location', 'Status', 'Qualification/Exp', 'Budget', 'Property Type', 'Demo Date', 'Demo Time'];
         
         // Map filtered rows
         const rows = filteredLeads.map(l => [
@@ -134,7 +151,10 @@ const LeadManager = ({ onViewChat }) => {
             `"${l.phone || ''}"`,
             `"${l.email || ''}"`,
             `"${l.address || ''}"`,
-            `"${(l.tags || []).join(', ')}"`,
+            `"${l.leadStatus || 'New'}"`,
+            `"${l.leadData?.job_qual_exp || ''}"`,
+            `"${l.leadData?.property_budget || ''}"`,
+            `"${l.leadData?.property_type || ''}"`,
             `"${l.leadData?.demo_date || ''}"`,
             `"${l.leadData?.demo_time || ''}"`
         ]);
@@ -361,6 +381,13 @@ const LeadManager = ({ onViewChat }) => {
                                         <td className="px-4 py-3.5">
                                             <div className="flex items-center gap-2">
                                                 <button
+                                                    onClick={() => setSelectedLead(lead)}
+                                                    className="flex items-center justify-center p-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 hover:text-white border border-purple-500/30 rounded-xl transition-all active:scale-95"
+                                                    title="View Full Intelligence"
+                                                >
+                                                    <Info size={14} />
+                                                </button>
+                                                <button
                                                     onClick={() => onViewChat(lead)}
                                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 hover:text-white border border-blue-500/30 rounded-xl text-xs font-bold transition-all active:scale-95"
                                                 >
@@ -368,7 +395,7 @@ const LeadManager = ({ onViewChat }) => {
                                                 </button>
                                                 <button
                                                     onClick={() => setDeletingLead(lead)}
-                                                    className="flex items-center justify-center p-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 hover:text-red-200 border border-red-500/30 rounded-xl transition-all active:scale-95"
+                                                    className="flex items-center justify-center p-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 hover:text-red-200 border border-red-500/30 rounded-xl transition-all active:scale-95"
                                                     title="Delete Lead"
                                                 >
                                                     <Trash2 size={14} />
@@ -457,6 +484,162 @@ const LeadManager = ({ onViewChat }) => {
                                     {isDeleting ? <RefreshCw className="animate-spin" size={16} /> : 'Delete Permanently'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Lead Intelligence Detail Panel (Side Drawer) ── */}
+            {selectedLead && (
+                <div className="fixed inset-0 z-[60] flex justify-end animate-in fade-in duration-300">
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setSelectedLead(null)} />
+                    
+                    {/* Drawer Content */}
+                    <div className="relative w-full max-w-2xl bg-gray-950 border-l border-gray-800 shadow-2xl h-full flex flex-col animate-in slide-in-from-right duration-500">
+                        {/* Header */}
+                        <div className="p-8 border-b border-gray-800 bg-gray-900/30 backdrop-blur-sm sticky top-0 z-10">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-blue-600 to-purple-800 flex items-center justify-center text-2xl font-black text-white shadow-lg border border-white/10 ring-4 ring-blue-500/10">
+                                        {(selectedLead.name || "?").charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-black text-white tracking-tight">{selectedLead.name || "Anonymous Lead"}</h2>
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                            <span className="px-3 py-1 rounded-full bg-blue-600/10 text-blue-400 border border-blue-500/30 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                                                <div className="w-1.5 h-1.5 animate-pulse bg-blue-400 rounded-full" />
+                                                Lead Stage: {selectedLead.leadStatus || "New"}
+                                            </span>
+                                            <span className="text-gray-600 text-[10px] font-bold">ID: {selectedLead._id.slice(-8)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={() => setSelectedLead(null)} className="p-3 bg-gray-900 hover:bg-gray-800 text-gray-500 hover:text-white rounded-2xl border border-gray-800 transition-all active:scale-95">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-4">
+                                <div className="flex items-center gap-2 px-3 py-2 bg-gray-900/50 rounded-xl border border-gray-800">
+                                    <Phone size={14} className="text-gray-500" />
+                                    <span className="text-xs text-gray-300 font-bold">{selectedLead.phone || "No Phone"}</span>
+                                </div>
+                                <div className="flex items-center gap-2 px-3 py-2 bg-gray-900/50 rounded-xl border border-gray-800">
+                                    <Mail size={14} className="text-gray-500" />
+                                    <span className="text-xs text-gray-300 font-bold">{selectedLead.email || "No Email"}</span>
+                                </div>
+                                <div className="flex items-center gap-2 px-3 py-2 bg-gray-900/50 rounded-xl border border-gray-800">
+                                    <MapPin size={14} className="text-gray-500" />
+                                    <span className="text-xs text-gray-300 font-bold">{selectedLead.address || "No Location"}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Content Body */}
+                        <div className="flex-1 overflow-y-auto p-8 space-y-10 scrollbar-thin">
+                            
+                            {/* Career & Skills Section */}
+                            <section>
+                                <div className="flex items-center gap-3 mb-5">
+                                    <Briefcase size={20} className="text-purple-400" />
+                                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Career Intelligence</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <DetailRow icon={FileText} label="Qual & Experience" value={selectedLead.leadData?.job_qual_exp} color="text-purple-400" />
+                                    <DetailRow icon={MapPin} label="Preferred Location" value={selectedLead.leadData?.job_pref_location} color="text-purple-400" />
+                                </div>
+                                
+                                {selectedLead.userAttachments && selectedLead.userAttachments.length > 0 && (
+                                    <div className="mt-4 p-5 bg-purple-600/5 border border-purple-500/20 rounded-2xl flex items-center justify-between group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-purple-600/10 rounded-xl border border-purple-500/30 text-purple-400">
+                                                <FileText size={24} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-0.5">Resume / Document</p>
+                                                <p className="text-sm font-bold text-white max-w-[200px] truncate">{selectedLead.userAttachments[0].name}</p>
+                                            </div>
+                                        </div>
+                                        <a 
+                                            href={`${import.meta.env.VITE_API_BASE_URL}${selectedLead.userAttachments[0].url}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black shadow-lg shadow-purple-600/20 transition-all flex items-center gap-2"
+                                        >
+                                            <Download size={14} /> Download
+                                        </a>
+                                    </div>
+                                )}
+                            </section>
+
+                            {/* Property Section */}
+                            <section>
+                                <div className="flex items-center gap-3 mb-5">
+                                    <Building size={20} className="text-blue-400" />
+                                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Property Interests</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <DetailRow icon={Database} label="Plan / Budget" value={selectedLead.leadData?.property_budget} color="text-blue-400" />
+                                    <DetailRow icon={RefreshCw} label="Property Type" value={selectedLead.leadData?.property_type} color="text-blue-400" />
+                                    <DetailRow icon={MapPin} label="Preferred Area" value={selectedLead.leadData?.property_pref_location} color="text-blue-400" />
+                                    <DetailRow icon={Tag} label="Price Estimate" value={selectedLead.leadData?.property_price} color="text-blue-400" />
+                                </div>
+                            </section>
+
+                            {/* Service Enquiries Timeline */}
+                            <section className="pb-10">
+                                <div className="flex items-center gap-3 mb-5">
+                                    <Clock size={20} className="text-emerald-400" />
+                                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Enquiry History</h3>
+                                </div>
+                                <div className="space-y-3">
+                                    {selectedLead.enquiries && selectedLead.enquiries.length > 0 ? (
+                                        selectedLead.enquiries.map((enq, idx) => (
+                                            <div key={idx} className="p-4 bg-gray-900/30 border border-gray-800 rounded-2xl flex items-center justify-between group hover:bg-gray-900/60 transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20">
+                                                        <ArrowUpRight size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-200">{enq.service}</p>
+                                                        <p className="text-[10px] text-gray-500 mt-0.5">{new Date(enq.timestamp).toLocaleString()}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="px-3 py-1 bg-gray-950 border border-gray-800 rounded-lg text-[9px] font-bold text-gray-400 group-hover:text-emerald-400 transition-colors uppercase tracking-widest">
+                                                    Captured
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="p-10 text-center bg-gray-900/20 border border-dashed border-gray-800 rounded-3xl">
+                                            <p className="text-xs text-gray-600 font-bold uppercase tracking-widest">No detailed enquiries found</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        </div>
+                        
+                        {/* Footer Actions */}
+                        <div className="p-8 border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm flex gap-3">
+                            <button 
+                                onClick={() => {
+                                    onViewChat(selectedLead);
+                                    setSelectedLead(null);
+                                }}
+                                className="flex-1 flex items-center justify-center gap-2 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-600/20 transition-all active:scale-95"
+                            >
+                                <MessageCircle size={16} /> Open Full Chat History
+                            </button>
+                            {selectedLead.leadData?.demo_date && (
+                                <div className="flex items-center gap-3 px-6 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl text-emerald-400">
+                                    <CalendarClock size={18} />
+                                    <div className="text-left">
+                                        <p className="text-[8px] font-black uppercase tracking-widest leading-none">Booked For</p>
+                                        <p className="text-[11px] font-bold mt-1">{selectedLead.leadData.demo_date} • {selectedLead.leadData.demo_time}</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
